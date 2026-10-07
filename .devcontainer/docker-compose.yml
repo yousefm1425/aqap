@@ -1,0 +1,21 @@
+services:
+  app:
+    build: { context: ., dockerfile: Dockerfile }
+    volumes: [ "..:/workspaces/aqap:cached" ]
+    command: sleep infinity
+    environment:
+      AQAP_ENV: dev
+      AQAP_DATABASE_URL: postgresql://aqap:aqap@db:5432/aqap
+      AQAP_STORAGE_BACKEND: local
+      AQAP_LOCAL_STORAGE_DIR: /workspaces/aqap/_storage
+      AQAP_JWT_SECRET: codespaces-dev-only
+      AQAP_OFFICIAL_TEMPLATE: /workspaces/aqap/templates/model.xlsb
+      AQAP_TEST_ADMIN_URL: postgresql://aqap:aqap@db:5432/postgres
+    depends_on: [ db ]
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment: { POSTGRES_USER: aqap, POSTGRES_PASSWORD: aqap, POSTGRES_DB: aqap }
+    volumes: [ "pgdata:/var/lib/postgresql/data" ]
+volumes:
+  pgdata:
