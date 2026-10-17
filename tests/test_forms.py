@@ -70,7 +70,8 @@ def test_executive_plan_lifecycle(client):
     tpls = client.get(f"{API}/cycles/1/forms/templates?department_id=1", headers=coord).json()
     assert [t["requirement_code"] for t in tpls] == ["1-1-2", "1-2-2", "1-2-3", "1-3-2", "1-3-3", "1-3-4", "1-4-1", "1-4-2",
                                                      "2-1-1", "2-1-3", "2-2-1", "2-2-2", "2-2-4", "2-2-5", "2-2-6", "2-2-7",
-                                                     "2-2-9", "2-2-10"]
+                                                     "2-2-9", "2-2-10", "3-1-2", "3-2-2", "3-2-5", "3-3-2", "4-1-2", "4-1-3",
+                                                     "4-2-1", "4-2-2", "4-3-1"]
     t132 = next(t for t in tpls if t["requirement_code"] == "1-3-2")
     assert t132["sub_standard_code"] == "1-3" and t132["kind"] == "plan" and t132["records"] == []
 
@@ -222,7 +223,36 @@ SAMPLES = {
     "2-2-10": ({}, {"projects": [{"name": "أ", "specialty": "وسائط", "title": "حملة توعوية", "result": "ناجح", "external": "لا"},
                                  {"name": "ب", "specialty": "وسائط", "title": "التمور", "result": "ناجح", "external": "نعم"},
                                  {"name": "ج", "specialty": "برمجة", "title": "تطبيق", "result": "راسب"}]}),
+    "3-2-5": ({}, {"courses": [{"specialty": "شبكات", "course": "م1", "meeting1": "تم", "aligned1": "نعم", "committed1": "نعم", "exam1": "لا",
+                                "meeting2": "لم يتم"}]}),
+    "4-1-3": ({}, {"trainers": [{"name": "أ", "file1": "مكتمل", "lms1": "جزئي", "att1": "مكتمل", "grades1": "مكتمل"},
+                                {"name": "ب", "file1": "لا يوجد", "att1": "مكتمل", "grades1": "لم يتم"}]}),
+    "4-2-2": ({}, {"requests": [{"semester": "الأول", "specialty": "ش", "type": "تجهيزات تدريبية", "item": "موجه", "status": "مُنفذ"},
+                                {"semester": "الأول", "specialty": "ش", "type": "أخرى", "item": "كابلات", "status": "مُنفذ جزئي"}]}),
+    "4-3-1": ({}, {"weeks": [{"semester": "الأول", "week": "الأول", "trainers": 20, "trainers_present": 19, "trainees": 400,
+                              "trainees_present": 360, "sections": 50, "sections_done": 50},
+                             {"semester": "الأول", "week": "الثاني", "trainers": 20, "trainers_present": 20, "trainees": 400,
+                              "trainees_present": 380, "sections": 50, "sections_done": 48}]}),
 }
+
+
+def test_standard3_4_formulas():
+    from app.form_templates import TEMPLATES
+    from app.forms_engine import clean_follow, clean_plan, compute
+    def run(code):
+        t = next(x for x in TEMPLATES if x["requirement_code"] == code)
+        p, f = SAMPLES[code]
+        plan = clean_plan(t["schema"], p)
+        return compute(t["schema"], plan, clean_follow(t["schema"], plan, f))
+    sm = run("3-2-5")["summaries"]["courses"]
+    assert sm["meetings"] == 0.5 and round(sm["integration"], 4) == 0.6667
+    sm = run("4-1-3")["summaries"]["trainers"]
+    assert sm["files"] == 0.5 and sm["lms"] == 0 and sm["rayat"] == 0.75
+    r = run("4-2-2")
+    assert r["summaries"]["requests"]["execution_pct"] == 0.75 and r["progress"] == 0.75
+    r = run("4-3-1")
+    assert r["tables"]["weeks"][0]["trainers_pct"] == 0.95 and r["summaries"]["weeks"]["trainees_pct"] == 740 / 800
+    assert r["summaries"]["weeks"]["sections_pct"] == 0.98
 
 
 def test_standard2_formulas_match_excel():
