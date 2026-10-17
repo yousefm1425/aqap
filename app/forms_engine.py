@@ -244,8 +244,32 @@ def eval_row(expr: dict, row: dict) -> Any:
     raise FormError(f"صيغة غير معروفة: {op}")
 
 
-def eval_summary(expr: dict, rows: list[dict]) -> Any:
+def _match(row: dict, cond: dict) -> bool:
+    for k, v in cond.items():
+        if isinstance(v, list):
+            if row.get(k) not in v:
+                return False
+        elif row.get(k) != v:
+            return False
+    return True
+
+
+def eval_summary(expr: dict, rows: list[dict], tables: dict | None = None) -> Any:
     op = expr["op"]
+    if op == "count_match":
+        return sum(1 for r in rows if _match(r, expr["match"]))
+    if op == "ratio_match":
+        den = sum(1 for r in rows if _match(r, expr["den"]))
+        return None if not den else sum(1 for r in rows if _match(r, expr["num"])) / den
+    if op in ("per_lookup", "per_sum"):
+        n = sum(1 for r in rows if _match(r, expr["match"]))
+        other = (tables or {}).get(expr["table"], [])
+        if op == "per_sum":
+            d = sum(x for x in (_num(r.get(expr["col"])) for r in other) if x is not None)
+        else:
+            hit = next((r for r in other if (r.get(expr["key"]) or "").strip() == expr["_group"]), None)
+            d = _num(hit.get(expr["col"])) if hit else None
+        return None if not d else n / d
     if op == "status_pct":
         col = expr["col"]
         done = sum(1 for r in rows if r.get(col) == DONE)
@@ -306,7 +330,7 @@ def _pivot(section: dict, tables: dict[str, list[dict]]) -> list[dict]:
                 n = _num(other.get(e["col"])) if other else None
                 vals[c["key"]] = None if n is None else f"1 : {_round_half_up(n / len(rows))}"
             else:
-                vals[c["key"]] = eval_summary(e, rows)
+                vals[c["key"]] = eval_summary({**e, "_group": g} if e["op"] == "per_lookup" else e, rows, tables)
         out.append({"group": g, "count": len(rows), "values": vals})
     return out
 
@@ -324,8 +348,9 @@ def compute(schema: dict, plan: dict, follow: dict) -> dict:
                 if c["type"] == "computed":
                     r[c["key"]] = eval_row(c["expr"], r)
         tables[s["key"]] = rows
-        if s.get("summary"):
-            summaries[s["key"]] = {m["key"]: eval_summary(m["expr"], rows) for m in s["summary"]}
+    for s in schema["sections"]:                         # الملخصات بعد اكتمال الجداول (قد تشير إلى جدول آخر)
+        if s["type"] == "table" and s.get("summary"):
+            summaries[s["key"]] = {m["key"]: eval_summary(m["expr"], tables[s["key"]], tables) for m in s["summary"]}
     pivots = {s["key"]: _pivot(s, tables) for s in schema["sections"] if s["type"] == "pivot"}
     prog = schema.get("progress")
     progress = summaries.get(prog["section"], {}).get(prog["summary"]) if prog else None

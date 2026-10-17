@@ -164,6 +164,25 @@ def test_fixed_rows_and_pivot(client):
     assert round(g["values"]["released1"], 4) == 0.3333 and g["values"]["avg_load2"] is None
 
 
+def test_complaints_report_matches_official_formulas():
+    """1-4-2 بعينة ملف القسم: نسبة الطلبات = (تظلم + شكوى) ÷ المتدربين، والإنجاز = المعالَج منها ÷ عددها."""
+    from app.form_templates import TEMPLATES
+    from app.forms_engine import clean_follow, clean_plan, compute
+    t = next(x for x in TEMPLATES if x["requirement_code"] == "1-4-2")
+    assert not t.get("is_provisional")
+    p, f = SAMPLES["1-4-2"]
+    plan = clean_plan(t["schema"], p)
+    r = compute(t["schema"], plan, clean_follow(t["schema"], plan, f))
+    piv = {g["group"]: g["values"] for g in r["pivots"]["stats_by_specialty"]}
+    assert piv["شبكات"]["complaints1"] == 1 and piv["شبكات"]["suggestions1"] == 1 and piv["شبكات"]["rate1"] == 1 / 40
+    assert piv["شبكات"]["done1"] == 1 and piv["شبكات"]["appeals2"] == 1 and piv["شبكات"]["done2"] == 0
+    assert piv["الدعم الفني"]["rate1"] == 0 and piv["الدعم الفني"]["done1"] is None
+    assert piv["برمجيات"]["rate1"] is None                                       # لا عدد متدربين مُدخل للتخصص
+    sm = r["summaries"]["requests"]
+    assert sm["appeals1"] == 1 and sm["complaints1"] == 1 and sm["suggestions1"] == 3
+    assert sm["rate1"] == 2 / 60 and sm["done1"] == 1 and sm["done2"] == 0 and r["progress"] == 2 / 3
+
+
 SAMPLES = {
     "1-1-2": ({"rows": [{"id": "a", "initiative": "م", "kpi": "ك", "t1": 0.2, "t2": 0.2, "owner": "ر"},
                         {"id": "b", "initiative": "م2", "kpi": "ك", "t1": 0.65, "owner": "ر"}]},
@@ -177,8 +196,14 @@ SAMPLES = {
               {"specialties": {"s": {"cap2": 60, "app2": 150, "adm2": 70}}}),
     "1-4-1": ({"tasks": [{"id": "a", "semester": "الأول", "task": "قناة تليجرام", "target": "المتدربين", "owner": "الفريق الإعلامي"}]},
               {"tasks": {"a": {"status": "مُنفذ", "achieved": "متحقق"}}}),
-    "1-4-2": ({}, {"cases": [{"date": "1/3/1448", "type": "شكوى", "subject": "س", "state": "تمت المعالجة"},
-                             {"date": "2/3/1448", "type": "مقترح", "subject": "ع"}]}),
+    "1-4-2": ({"trainees": [{"id": "n", "specialty": "شبكات", "n1": 40, "n2": 38}, {"id": "d", "specialty": "الدعم الفني", "n1": 20}]},
+              {"requests": [
+                  {"semester": "الأول", "trainee_name": "أ", "specialty": "شبكات", "type": "مقترح", "state": "لم يتم"},
+                  {"semester": "الأول", "trainee_name": "ب", "specialty": "الدعم الفني", "type": "مقترح", "state": "لم يتم"},
+                  {"semester": "الأول", "trainee_name": "ج", "specialty": "الدعم الفني", "type": "مقترح", "state": "تم"},
+                  {"semester": "الأول", "trainee_name": "د", "specialty": "برمجيات", "type": "تظلم", "state": "تم"},
+                  {"semester": "الأول", "trainee_name": "أ", "specialty": "شبكات", "type": "شكوى", "state": "تم"},
+                  {"semester": "الثاني", "trainee_name": "هـ", "specialty": "شبكات", "type": "تظلم"}]}),
 }
 
 

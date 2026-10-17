@@ -323,28 +323,60 @@ TEMPLATES: list[dict] = [
                                  target_suggest=["المتدربين", "المدربين", "المتدربين والمدربين"]),
     },
     {
-        "requirement_code": "1-4-2", "kind": "report", "sort_order": 8, "is_provisional": True,
+        "requirement_code": "1-4-2", "kind": "report", "sort_order": 8,
         "title_ar": "تقرير متابعة شكاوى وتظلمات ومقترحات المتدربين في القسم التدريبي والتوصيات",
-        "guidance_ar": "نموذج مبدئي إلى أن يُعتمد النموذج الرسمي: سجل الشكاوى والتظلمات والمقترحات ومعالجتها.",
+        "guidance_ar": "سجّل كل طلب (شكوى أو تظلم أو مقترح) وإجراء معالجته وحالة إنجازه، وأدخل عدد المتدربين المستمرين في كل تخصص؛ "
+                       "تُحسب الإحصائيات لكل تخصص وللقسم. نسبة الطلبات = (التظلمات + الشكاوى) ÷ عدد المتدربين، "
+                       "ونسبة الإنجاز = المعالَج منها ÷ عددها.",
         "schema": {
             "sections": [
-                {"key": "cases", "type": "table", "title": "سجل الشكاوى والتظلمات والمقترحات", "max_rows": 200,
-                 "columns": [col("date", "التاريخ", "text", "follow", required=True),
-                             col("type", "النوع", "select", "follow", options=["شكوى", "تظلم", "مقترح"], required=True),
-                             col("subject", "الموضوع", "longtext", "follow", required=True),
-                             col("channel", "قناة الاستلام", "text", "follow", suggest=["مكتب القسم", "البريد الإلكتروني", "المرشد التدريبي", "صندوق المقترحات", "منصة إلكترونية"]),
-                             col("action", "الإجراء المتخذ", "longtext", "follow"),
-                             col("state", "الحالة", "select", "follow", options=["تمت المعالجة", "قيد المعالجة", "لم تُعالج"]),
-                             col("closed_on", "تاريخ الإغلاق", "text", "follow")],
-                 "phase": "follow",
-                 "summary": [{"key": "n_complaints", "label": "الشكاوى", "format": "num", "expr": {"op": "count_eq", "col": "type", "eq": "شكوى"}},
-                             {"key": "n_appeals", "label": "التظلمات", "format": "num", "expr": {"op": "count_eq", "col": "type", "eq": "تظلم"}},
-                             {"key": "n_suggestions", "label": "المقترحات", "format": "num", "expr": {"op": "count_eq", "col": "type", "eq": "مقترح"}},
-                             {"key": "closed_pct", "label": "نسبة المعالجة", "format": "pct",
-                              "expr": {"op": "share_eq", "cols": ["state"], "eq": "تمت المعالجة"}}]},
+                {"key": "trainees", "type": "table", "title": "العدد الإجمالي للمتدربين المستمرين في كل تخصص",
+                 "min_rows": 1, "max_rows": 30,
+                 "columns": [col("specialty", "التخصص", "text", required=True),
+                             col("n1", "عدد المتدربين (ف1)", "number", required=True),
+                             col("n2", "عدد المتدربين (ف2)", "number", "follow")]},
+                {"key": "requests", "type": "table", "title": "تسجيل شكاوى وتظلمات ومقترحات المتدربين", "phase": "follow",
+                 "max_rows": 300,
+                 "columns": [col("semester", "الفصل التدريبي", "select", "follow", options=SEMESTERS, required=True),
+                             col("trainee_no", "رقم المتدرب", "text", "follow"),
+                             col("trainee_name", "اسم المتدرب", "text", "follow", required=True),
+                             col("specialty", "التخصص", "text", "follow", required=True),
+                             col("level", "المستوى", "text", "follow", suggest=[f"المستوى {i}" for i in range(1, 9)]),
+                             col("type", "نوع الطلب المقدم", "select", "follow", options=["شكوى", "تظلم", "مقترح"], required=True),
+                             col("date", "تاريخ تقديم الطلب", "text", "follow"),
+                             col("action", "إجراءات معالجة الاعتراض/المقترح", "longtext", "follow"),
+                             col("owner", "مسؤول التنفيذ", "text", "follow", suggest=["المرشد التدريبي", "مسجل القسم", "رئيس القسم", "مسؤول التواصل"]),
+                             col("state", "حالة الإنجاز", "select", "follow", options=["تم", "لم يتم"]),
+                             col("notes", "ملاحظات", "longtext", "follow")],
+                 "summary": [{"key": f"{t}{n}", "label": f"{lbl} (ف{n})", "format": "num",
+                              "expr": {"op": "count_match", "match": {"type": t_ar, "semester": sem}}}
+                             for n, sem in ((1, "الأول"), (2, "الثاني"))
+                             for t, t_ar, lbl in (("appeals", "تظلم", "تظلمات"), ("complaints", "شكوى", "شكاوى"), ("suggestions", "مقترح", "مقترحات"))]
+                            + [{"key": f"rate{n}", "label": f"نسبة طلبات التظلم والشكاوى للقسم (ف{n})", "format": "pct",
+                                "expr": {"op": "per_sum", "match": {"type": ["تظلم", "شكوى"], "semester": sem}, "table": "trainees", "col": f"n{n}"}}
+                               for n, sem in ((1, "الأول"), (2, "الثاني"))]
+                            + [{"key": f"done{n}", "label": f"نسبة الإنجاز (ف{n})", "format": "pct",
+                                "expr": {"op": "ratio_match", "num": {"type": ["تظلم", "شكوى"], "semester": sem, "state": "تم"},
+                                         "den": {"type": ["تظلم", "شكوى"], "semester": sem}}}
+                               for n, sem in ((1, "الأول"), (2, "الثاني"))]
+                            + [{"key": "done_pct", "label": "نسبة الإنجاز للعام", "format": "pct",
+                                "expr": {"op": "ratio_match", "num": {"type": ["تظلم", "شكوى"], "state": "تم"},
+                                         "den": {"type": ["تظلم", "شكوى"]}}}]},
+                {"key": "stats_by_specialty", "type": "pivot", "title": "تقرير إحصائي لمتابعة طلبات الشكاوى والتظلمات والمقترحات",
+                 "source": "requests", "group_by": "specialty",
+                 "columns": [c for n, sem in ((1, "الأول"), (2, "الثاني")) for c in (
+                     [{"key": f"{t}{n}", "label": lbl, "format": "num", "group": f"الفصل التدريبي {sem}",
+                       "expr": {"op": "count_match", "match": {"type": t_ar, "semester": sem}}}
+                      for t, t_ar, lbl in (("appeals", "تظلم", "تظلم"), ("complaints", "شكوى", "شكوى"), ("suggestions", "مقترح", "مقترح"))]
+                     + [{"key": f"rate{n}", "label": "نسبة طلبات التظلم والشكاوى", "format": "pct", "group": f"الفصل التدريبي {sem}",
+                         "expr": {"op": "per_lookup", "match": {"type": ["تظلم", "شكوى"], "semester": sem},
+                                  "table": "trainees", "key": "specialty", "col": f"n{n}"}},
+                        {"key": f"done{n}", "label": "الإنجاز", "format": "pct", "group": f"الفصل التدريبي {sem}",
+                         "expr": {"op": "ratio_match", "num": {"type": ["تظلم", "شكوى"], "semester": sem, "state": "تم"},
+                                  "den": {"type": ["تظلم", "شكوى"], "semester": sem}}}])]},
                 {"key": "recommendations", "type": "text", "title": "التوصيات", "phase": "follow"},
             ],
-            "progress": {"section": "cases", "summary": "closed_pct"},
+            "progress": {"section": "requests", "summary": "done_pct"},
         },
     },
 ]

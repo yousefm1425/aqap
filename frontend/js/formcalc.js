@@ -47,8 +47,23 @@ export function evalRow(e, row) {
   }
 }
 
-export function evalSummary(e, rows) {
+const match = (row, cond) => Object.entries(cond).every(([k, v]) => (Array.isArray(v) ? v.includes(row[k]) : row[k] === v));
+
+export function evalSummary(e, rows, tables = {}) {
   switch (e.op) {
+    case 'count_match': return rows.filter(r => match(r, e.match)).length;
+    case 'ratio_match': {
+      const den = rows.filter(r => match(r, e.den)).length;
+      return !den ? null : rows.filter(r => match(r, e.num)).length / den;
+    }
+    case 'per_lookup': case 'per_sum': {
+      const n = rows.filter(r => match(r, e.match)).length;
+      const other = tables[e.table] || [];
+      let d;
+      if (e.op === 'per_sum') d = sum(other.map(r => num(r[e.col])).filter(x => x != null));
+      else { const hit = other.find(r => trimKey(r[e.key] || '') === e._group); d = hit ? num(hit[e.col]) : null; }
+      return !d ? null : n / d;
+    }
     case 'status_pct': {
       const c = s => rows.filter(r => r[e.col] === s).length;
       const done = c(DONE), part = c(PARTIAL), nd = c(NOT_DONE);
@@ -99,7 +114,7 @@ function pivot(section, tables) {
         const other = (tables[e.table] || []).find(r => trimKey(r[e.key] || '') === g);
         const n = other ? num(other[e.col]) : null;
         values[c.key] = n == null ? null : `1 : ${roundHalfUp(n / rows.length)}`;
-      } else values[c.key] = evalSummary(e, rows);
+      } else values[c.key] = evalSummary(e.op === 'per_lookup' ? { ...e, _group: g } : e, rows, tables);
     }
     return { group: g, count: rows.length, values };
   });
@@ -112,7 +127,9 @@ export function compute(schema, plan, follow) {
     const rows = mergedRows(s, plan, follow);
     for (const r of rows) for (const c of s.columns) if (c.type === 'computed') r[c.key] = evalRow(c.expr, r);
     tables[s.key] = rows;
-    if (s.summary) summaries[s.key] = Object.fromEntries(s.summary.map(m => [m.key, evalSummary(m.expr, rows)]));
+  }
+  for (const s of schema.sections) {
+    if (s.type === 'table' && s.summary) summaries[s.key] = Object.fromEntries(s.summary.map(m => [m.key, evalSummary(m.expr, tables[s.key], tables)]));
   }
   const pivots = Object.fromEntries(schema.sections.filter(s => s.type === 'pivot').map(s => [s.key, pivot(s, tables)]));
   const prog = schema.progress;
