@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from . import db, storage
 from .config import settings
 from .errors import register_error_handlers
-from .routers import actions, assessments, cycles, evidence, exports, minutes, reports
+from .routers import actions, assessments, cycles, evidence, exports, forms, minutes, reports
 from .security import CurrentUser, current_user, get_conn, issue_dev_token
 
 
@@ -18,6 +18,8 @@ from .security import CurrentUser, current_user, get_conn, issue_dev_token
 async def lifespan(_: FastAPI):
     await db.open_pool(settings.database_url)
     storage.init_storage()
+    async with db.transaction() as conn:                 # قوالب النماذج من الكود (إصدار جديد عند التغيير فقط)
+        await forms.sync_templates(conn)
     yield
     await db.close_pool()
 
@@ -25,7 +27,7 @@ async def lifespan(_: FastAPI):
 app = FastAPI(title="AQAP API", version="0.1.0",
               description="واجهة برمجية لمنصة إدارة الجودة والاعتماد الأكاديمي", lifespan=lifespan)
 register_error_handlers(app)
-for r in (cycles.router, assessments.router, evidence.router, actions.router, reports.router, exports.router, minutes.router):
+for r in (cycles.router, assessments.router, evidence.router, actions.router, reports.router, exports.router, minutes.router, forms.router):
     app.include_router(r, prefix="/api/v1")
 
 

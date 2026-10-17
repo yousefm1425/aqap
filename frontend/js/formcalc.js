@@ -1,0 +1,133 @@
+// حاسبة صيغ النماذج — نسخة مطابقة لـ app/forms_engine.py (اختبار التطابق في tests/test_forms.py)
+const DONE = 'مُنفذ', PARTIAL = 'مُنفذ جزئي', NOT_DONE = 'لم يُنفذ';
+const AR_DIGITS = '٠١٢٣٤٥٦٧٨٩';
+
+export function num(v) {
+  if (v == null || v === '' || typeof v === 'boolean') return null;
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+  const s = String(v).trim().replace(/٫/g, '.').replace(/,/g, '').replace(/[٠-٩]/g, d => String(AR_DIGITS.indexOf(d)));
+  if (s === '' || !/^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/.test(s)) return null;
+  const f = Number(s);
+  return Number.isFinite(f) ? f : null;
+}
+export const isEmpty = v => v == null || (typeof v === 'string' && !v.trim());
+export const tablePhase = s => (s.phase === 'follow' ? 'follow' : 'mixed');
+
+export function mergedRows(section, plan, follow) {
+  const k = section.key;
+  if (tablePhase(section) === 'follow') return (follow[k] || []).map(r => ({ ...r }));
+  const fixed = Object.fromEntries((section.fixed_rows || []).map(fr => [fr.id, fr]));
+  const fmap = follow[k] || {};
+  return (plan[k] || []).map(r => ({ ...(fixed[r.id] || {}), ...r, ...(fmap[r.id] || {}) }));
+}
+
+const roundHalfUp = x => (x >= 0 ? Math.floor(x + 0.5) : -Math.floor(-x + 0.5));
+const sum = a => a.reduce((s, x) => s + x, 0);
+
+export function evalRow(e, row) {
+  switch (e.op) {
+    case 'ratio': { const a = num(row[e.a]), b = num(row[e.b]); return a == null || !b ? null : a / b; }
+    case 'sumratio': {
+      const nums = e.num.map(x => num(row[x])), dens = e.den.map(x => num(row[x]));
+      if (nums.every(n => n == null)) return null;
+      const d = sum(dens.filter(x => x != null));
+      return !d ? null : sum(nums.filter(x => x != null)) / d;
+    }
+    case 'sub': { const a = num(row[e.a]), b = num(row[e.b]); return a == null || b == null ? null : a - b; }
+    case 'avg': { const v = e.of.map(x => num(row[x])).filter(x => x != null); return v.length ? sum(v) / v.length : null; }
+    case 'band': {
+      let v = num(row[e.of]);
+      if (v == null) return null;
+      if (e.trunc) v = Math.trunc(v);
+      for (const [lo, hi, label] of e.bands) if (v >= lo && (hi == null || v < hi)) return label;
+      return null;
+    }
+    case 'map': return e.map[row[e.of]] ?? null;
+    default: throw new Error(`صيغة غير معروفة: ${e.op}`);
+  }
+}
+
+export function evalSummary(e, rows) {
+  switch (e.op) {
+    case 'status_pct': {
+      const c = s => rows.filter(r => r[e.col] === s).length;
+      const done = c(DONE), part = c(PARTIAL), nd = c(NOT_DONE);
+      const den = e.denominator === 'rows' ? rows.length : done + part + nd;
+      return !den ? null : (done + 0.5 * part) / den;
+    }
+    case 'sum': { const v = rows.map(r => num(r[e.col])).filter(x => x != null); return v.length ? sum(v) : null; }
+    case 'ratio_sums': {
+      const n = rows.map(r => num(r[e.num])).filter(x => x != null);
+      const d = sum(rows.map(r => num(r[e.den])).filter(x => x != null));
+      return !n.length || !d ? null : sum(n) / d;
+    }
+    case 'avg': { const v = rows.map(r => num(r[e.col])).filter(x => x != null); return v.length ? sum(v) / v.length : null; }
+    case 'count': return rows.length;
+    case 'count_eq': return rows.filter(r => r[e.col] === e.eq).length;
+    case 'share_eq': {
+      let cells = rows.flatMap(r => e.cols.map(c => r[c]));
+      if (e.denominator === 'filled') cells = cells.filter(v => !isEmpty(v));
+      return !cells.length ? null : cells.filter(v => v === e.eq).length / cells.length;
+    }
+    case 'share_nonempty': return !rows.length ? null : rows.filter(r => !isEmpty(r[e.col])).length / rows.length;
+    case 'avg_where': {
+      const sel = rows.filter(r => e.in.includes(r[e.where]));
+      return !sel.length ? null : sum(sel.map(r => num(r[e.col]) ?? 0)) / sel.length;
+    }
+    default: throw new Error(`صيغة غير معروفة: ${e.op}`);
+  }
+}
+
+const trimKey = v => (typeof v === 'string' ? v.trim() : v);
+
+function pivot(section, tables) {
+  const src = tables[section.source] || [];
+  const order = [], groups = new Map();
+  for (const r of src) {
+    const g = typeof r[section.group_by] === 'string' ? r[section.group_by].trim() : r[section.group_by];
+    if (isEmpty(g)) continue;
+    if (!groups.has(g)) { order.push(g); groups.set(g, []); }
+    groups.get(g).push(r);
+  }
+  return order.map(g => {
+    const rows = groups.get(g);
+    const values = {};
+    for (const c of section.columns) {
+      const e = c.expr;
+      if (c.requires && rows.every(r => isEmpty(r[c.requires]))) values[c.key] = null;
+      else if (e.op === 'per_ratio') {
+        const other = (tables[e.table] || []).find(r => trimKey(r[e.key] || '') === g);
+        const n = other ? num(other[e.col]) : null;
+        values[c.key] = n == null ? null : `1 : ${roundHalfUp(n / rows.length)}`;
+      } else values[c.key] = evalSummary(e, rows);
+    }
+    return { group: g, count: rows.length, values };
+  });
+}
+
+export function compute(schema, plan, follow) {
+  const tables = {}, summaries = {};
+  for (const s of schema.sections) {
+    if (s.type !== 'table') continue;
+    const rows = mergedRows(s, plan, follow);
+    for (const r of rows) for (const c of s.columns) if (c.type === 'computed') r[c.key] = evalRow(c.expr, r);
+    tables[s.key] = rows;
+    if (s.summary) summaries[s.key] = Object.fromEntries(s.summary.map(m => [m.key, evalSummary(m.expr, rows)]));
+  }
+  const pivots = Object.fromEntries(schema.sections.filter(s => s.type === 'pivot').map(s => [s.key, pivot(s, tables)]));
+  const prog = schema.progress;
+  return {
+    tables, summaries, pivots,
+    progress: prog ? (summaries[prog.section]?.[prog.summary] ?? null) : null,
+    improvement_pct: summaries.improvements?.improvement_pct ?? null,
+    rows: Object.entries(tables).filter(([k]) => k !== 'improvements').reduce((s, [, v]) => s + v.length, 0),
+    improvements: (tables.improvements || []).length,
+  };
+}
+
+export function fmt(v, f) {
+  if (v == null || v === '') return '—';
+  if (f === 'pct' && typeof v === 'number') return `${(v * 100).toFixed(1).replace(/\.0$/, '')}%`;
+  if (typeof v === 'number' && !Number.isInteger(v)) return String(Number(v.toFixed(2)));
+  return String(v);
+}

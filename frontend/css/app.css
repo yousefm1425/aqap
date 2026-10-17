@@ -239,3 +239,25 @@ input[type=text]:disabled, textarea:disabled, select:disabled { background: var(
 .checks li.opt { background: var(--line-2); color: var(--ink-2); }
 .linkish { background: none; border: 0; padding: 0; color: var(--primary); font-weight: 600; cursor: pointer; text-align: start; }
 .linkish:hover { text-decoration: underline; }
+
+/* الخطط والتقارير (النماذج الإلكترونية) */
+.std-head { padding: .55rem 1rem .35rem; font-size: .8rem; color: var(--ink-2); background: var(--paper); border-top: 1px solid var(--line-2); font-weight: 600; }
+.std-head:first-child { border-top: 0; }
+.table-scroll { overflow-x: auto; margin-inline: -1.5rem; padding-inline: 1.5rem; }
+table.form-table { font-size: .82rem; min-width: 100%; }
+table.form-table th { white-space: normal; min-width: 4.5rem; vertical-align: bottom; }
+table.form-table th.grp { text-align: center; background: var(--primary-soft); color: var(--primary); font-weight: 600; border-bottom: 0; }
+table.form-table td { padding: .3rem .35rem; vertical-align: top; }
+table.form-table td.num { text-align: center; white-space: nowrap; }
+table.form-table .computed { background: #F3F7F6; color: var(--primary); font-weight: 600; }
+table.form-table input, table.form-table select, table.form-table textarea { width: 100%; font-size: .82rem; padding: .3rem .4rem;
+  border: 1px solid var(--line); border-radius: 4px; background: var(--surface); }
+table.form-table textarea { resize: vertical; min-height: 2.2rem; }
+td.w-text { min-width: 9rem; } td.w-longtext { min-width: 14rem; } td.w-number { min-width: 5rem; }
+td.w-select { min-width: 7.5rem; } td.w-url { min-width: 11rem; }
+.fu-done { color: var(--met); font-weight: 600; } .fu-partial { color: #9A6C12; font-weight: 600; } .fu-not { color: var(--not-met); font-weight: 600; }
+select.fu-done { background: #EAF5EE; } select.fu-partial { background: var(--warn-bg); } select.fu-not { background: var(--danger-bg); }
+.form-sum { flex-wrap: wrap; gap: .4rem 1.4rem; }
+.grid3 { display: grid; grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr)); gap: .8rem; }
+@media (max-width: 900px) { .table-scroll { margin-inline: -1rem; padding-inline: 1rem; } }
+.ws > * { min-width: 0; }   /* الجداول العريضة تتمرر داخل إطارها لا الصفحة كلها */

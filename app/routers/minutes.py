@@ -12,6 +12,7 @@ from psycopg import AsyncConnection
 from starlette.concurrency import run_in_threadpool
 
 from .. import storage
+from ..linking import link_to_requirement
 from ..minutes_pdf import render_pdf
 from ..schemas import FollowUpIn, MinutesAttachIn, MinutesCreate, MinutesDoc, MinutesTransitionIn
 from ..security import CurrentUser, current_user, forbid, get_conn, load_cycle, not_found
@@ -224,27 +225,8 @@ async def delete_minutes(minutes_id: int, user: CurrentUser = Depends(current_us
 
 async def _link_to_requirement(conn: AsyncConnection, user: CurrentUser, doc: dict, evidence_id: int,
                                note: str) -> bool | None:
-    """يربط شاهداً بتقدير المتطلب في القسم؛ ويحترم مسار الاعتماد: يُربط فقط إن كان التقدير لدى القسم.
-
-    True: مربوط (أو كان مربوطاً)، False: التقدير ليس لدى القسم الآن، None: لا تقدير لهذا المتطلب في القسم."""
-    cur = await conn.execute(
-        """SELECT a.id, a.status FROM assessment a JOIN requirement r ON r.id = a.requirement_id
-             JOIN sub_standard ss ON ss.id = r.sub_standard_id JOIN standard s ON s.id = ss.standard_id
-             JOIN assessment_cycle c ON c.id = a.cycle_id AND c.framework_id = s.framework_id
-            WHERE a.cycle_id = %s AND a.department_id = %s AND r.code = %s""",
-        (doc["cycle_id"], doc["department_id"], doc["requirement_code"]))
-    a = await cur.fetchone()
-    if a is None:
-        return None
-    cur = await conn.execute("SELECT 1 FROM assessment_evidence WHERE assessment_id = %s AND evidence_id = %s",
-                             (a["id"], evidence_id))
-    if await cur.fetchone():
-        return True
-    if a["status"] in ("draft", "returned") and doc["cycle_status"] in ACTIVE_CYCLE:
-        await conn.execute("INSERT INTO assessment_evidence (assessment_id, evidence_id, linked_by, note) VALUES (%s, %s, %s, %s)",
-                           (a["id"], evidence_id, user.id, note))
-        return True
-    return False
+    return await link_to_requirement(conn, user, doc["cycle_id"], doc["department_id"], doc["requirement_code"],
+                                     doc["cycle_status"], evidence_id, note)
 
 
 async def _archive(conn: AsyncConnection, user: CurrentUser, minutes_id: int) -> dict:
