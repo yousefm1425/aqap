@@ -68,7 +68,9 @@ def h(client, email):
 def test_executive_plan_lifecycle(client):
     coord, hod, dean, ee = (h(client, e) for e in ("coord@ynb", "hod@ynb", "dean@ynb", "coord.ee@ynb"))
     tpls = client.get(f"{API}/cycles/1/forms/templates?department_id=1", headers=coord).json()
-    assert [t["requirement_code"] for t in tpls] == ["1-1-2", "1-2-2", "1-2-3", "1-3-2", "1-3-3", "1-3-4", "1-4-1", "1-4-2"]
+    assert [t["requirement_code"] for t in tpls] == ["1-1-2", "1-2-2", "1-2-3", "1-3-2", "1-3-3", "1-3-4", "1-4-1", "1-4-2",
+                                                     "2-1-1", "2-1-3", "2-2-1", "2-2-2", "2-2-4", "2-2-5", "2-2-6", "2-2-7",
+                                                     "2-2-9", "2-2-10"]
     t132 = next(t for t in tpls if t["requirement_code"] == "1-3-2")
     assert t132["sub_standard_code"] == "1-3" and t132["kind"] == "plan" and t132["records"] == []
 
@@ -204,7 +206,49 @@ SAMPLES = {
                   {"semester": "الأول", "trainee_name": "د", "specialty": "برمجيات", "type": "تظلم", "state": "تم"},
                   {"semester": "الأول", "trainee_name": "أ", "specialty": "شبكات", "type": "شكوى", "state": "تم"},
                   {"semester": "الثاني", "trainee_name": "هـ", "specialty": "شبكات", "type": "تظلم"}]}),
+    "2-1-3": ({}, {"trainees": [
+        {"specialty": "شبكات", "name": "أ", "advisor": "م1", "status": "منتظم", "cgpa": 3.2, "sgpa": 3.5, "units_required": 70, "units_earned": 40},
+        {"specialty": "شبكات", "name": "ب", "advisor": "م1", "status": "منذر أكاديمياً", "cgpa": 1.8, "units_required": 70},
+        {"specialty": "برمجة", "name": "ج", "advisor": "م2", "status": "متعثر", "cgpa": 2.1, "sgpa": 1.9}]}),
+    "2-2-1": ({}, {"traits_test": [{"specialty": "شبكات", "target1": 15, "present1": 12, "traits1": 70, "gpa_pct1": 78, "spec1": 65}],
+                   "specialty_test": [{"specialty": "شبكات", "target1": 15, "present1": 0, "target2": 20, "present2": 18}]}),
+    "2-2-2": ({}, {"courses": [
+        {"semester": "الأول", "exam": "الفصلي الأول", "specialty": "برمجة", "course": "برمجة الإنترنت", "registered": 22, "below60": 1, "absent": 0, "deprived": 2},
+        {"semester": "الأول", "exam": "الفصلي الأول", "specialty": "شبكات", "course": "ربط الشبكات", "registered": 25, "below60": 9, "absent": 0, "deprived": 0}]}),
+    "2-2-5": ({}, {"trainees": [{"name": "أ", "specialty": "برمجة", "committee": 60, "entity": 40},
+                                {"name": "ب", "specialty": "برمجة", "committee": 55, "entity": 39},
+                                {"name": "ج", "specialty": "شبكات", "p_committee": "ممتاز", "p_external": "لا"}]}),
+    "2-2-6": ({}, {"trainees": [{"name": "أ", "specialty": "شبكات", "field": "في غير مجال التخصص", "support": "الدعم والتوجيه"}]}),
+    "2-2-10": ({}, {"projects": [{"name": "أ", "specialty": "وسائط", "title": "حملة توعوية", "result": "ناجح", "external": "لا"},
+                                 {"name": "ب", "specialty": "وسائط", "title": "التمور", "result": "ناجح", "external": "نعم"},
+                                 {"name": "ج", "specialty": "برمجة", "title": "تطبيق", "result": "راسب"}]}),
 }
+
+
+def test_standard2_formulas_match_excel():
+    """قيم من ملفات المعيار الثاني: 1 أقل من 60٪ من 22 مسجلاً، والنتيجة النهائية للتعاوني = اللجنة + جهة التدريب."""
+    from app.form_templates import TEMPLATES
+    from app.forms_engine import clean_follow, clean_plan, compute
+    def run(code):
+        t = next(x for x in TEMPLATES if x["requirement_code"] == code)
+        p, f = SAMPLES[code]
+        plan = clean_plan(t["schema"], p)
+        return compute(t["schema"], plan, clean_follow(t["schema"], plan, f))
+    r = run("2-2-2")
+    c = r["tables"]["courses"]
+    assert round(c[0]["below60_pct"], 3) == 0.045 and round(c[0]["deprived_pct"], 3) == 0.091 and round(c[1]["below60_pct"], 2) == 0.36
+    assert r["summaries"]["courses"]["below60_pct"] == 10 / 47
+    r = run("2-2-5")
+    assert [x["final"] for x in r["tables"]["trainees"]] == [100, 94, None] and r["summaries"]["trainees"]["avg_final"] == 97
+    r = run("2-1-3")
+    assert r["tables"]["trainees"][0]["units_left"] == 30 and r["tables"]["trainees"][1]["units_left"] is None
+    adv = {g["group"]: g["values"] for g in r["pivots"]["by_advisor"]}
+    assert adv["م1"]["warned"] == 1 and round(adv["م1"]["avg_cgpa"], 2) == 2.5 and adv["م2"]["struggling"] == 1
+    r = run("2-2-1")
+    t = r["tables"]["traits_test"][0]
+    assert t["attend1"] == 0.8 and t["gap1"] == 13 and r["tables"]["specialty_test"][0]["attend1"] == 0
+    r = run("2-2-10")
+    assert round(r["summaries"]["projects"]["pass"], 4) == 0.6667 and r["summaries"]["projects"]["external"] == 0.5
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="node غير متوفر")

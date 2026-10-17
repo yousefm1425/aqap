@@ -33,6 +33,7 @@ export function evalRow(e, row) {
       const d = sum(dens.filter(x => x != null));
       return !d ? null : sum(nums.filter(x => x != null)) / d;
     }
+    case 'add': { const v = e.of.map(x => num(row[x])).filter(x => x != null); return v.length ? sum(v) : null; }
     case 'sub': { const a = num(row[e.a]), b = num(row[e.b]); return a == null || b == null ? null : a - b; }
     case 'avg': { const v = e.of.map(x => num(row[x])).filter(x => x != null); return v.length ? sum(v) / v.length : null; }
     case 'band': {

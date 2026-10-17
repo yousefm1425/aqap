@@ -107,7 +107,7 @@ def render_html(doc: dict) -> str:
         elif s["type"] == "pivot":
             groups = calc["pivots"].get(k, [])
             cols = s["columns"]
-            out.append(f"<h2>{escape(title)}</h2><table><thead>{_group_row(cols)}<tr><th>التخصص</th>"
+            out.append(f"<h2>{escape(title)}</h2><table><thead>{_group_row(cols)}<tr><th>{escape(s.get('group_label', 'التخصص'))}</th>"
                        + "".join(f"<th>{escape(c['label'])}</th>" for c in cols) + "</tr></thead><tbody>")
             for g in groups:
                 out.append(f"<tr><td>{escape(str(g['group']))} <span class='muted'>({g['count']})</span></td>"

@@ -232,10 +232,10 @@ export async function renderForms() {
 
     function drawPivot(s, groups, wrap) {
       mount(wrap, h('table', { class: 'data form-table' },
-        h('thead', null, groupRow(s.columns), h('tr', null, h('th', null, 'التخصص'), s.columns.map(c => h('th', { class: 'computed' }, c.label)))),
+        h('thead', null, groupRow(s.columns), h('tr', null, h('th', null, s.group_label || 'التخصص'), s.columns.map(c => h('th', { class: 'computed' }, c.label)))),
         h('tbody', null, groups.length ? groups.map(g => h('tr', null, h('td', null, g.group, h('span', { class: 'faint' }, ` (${g.count})`)),
           s.columns.map(c => h('td', { class: 'computed num' }, fmt(g.values[c.key], c.format)))))
-          : h('tr', null, h('td', { colspan: s.columns.length + 1, class: 'faint' }, 'أدخل بيانات المدربين والتخصصات لتظهر المؤشرات.')))));
+          : h('tr', null, h('td', { colspan: s.columns.length + 1, class: 'faint' }, 'أدخل بيانات الجدول أعلاه لتظهر المؤشرات.')))));
     }
 
     function fieldsSection(s) {

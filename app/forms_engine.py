@@ -223,6 +223,9 @@ def eval_row(expr: dict, row: dict) -> Any:
             return None
         d = sum(x for x in dens if x is not None)
         return None if not d else sum(x for x in nums if x is not None) / d
+    if op == "add":
+        vals = [n for n in (_num(row.get(x)) for x in expr["of"]) if n is not None]
+        return sum(vals) if vals else None
     if op == "sub":
         a, b = _num(row.get(expr["a"])), _num(row.get(expr["b"]))
         return None if a is None or b is None else a - b
