@@ -36,7 +36,9 @@ export async function renderForms() {
   const recordOf = t => t.records.find(r => r.department_id === dept) ?? null;
 
   async function load() {
-    templates = await api(`/cycles/${cycle.id}/forms/templates?department_id=${dept}`);
+    // النماذج المرتبطة بمتطلبات خارج نطاق القسم لا تظهر له
+    templates = (await api(`/cycles/${cycle.id}/forms/templates?department_id=${dept}`))
+      .filter(t => !(t.excluded_for || []).includes(dept));
   }
 
   function renderHead() {

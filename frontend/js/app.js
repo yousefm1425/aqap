@@ -7,6 +7,7 @@ import { renderPlans } from './plans.js';
 import { renderMinutes } from './minutes.js';
 import { renderForms } from './forms.js';
 import { renderReport } from './report.js';
+import { renderScope } from './scope.js';
 
 const root = document.getElementById('app');
 export const state = { me: null, cycles: [], cycle: null, departments: [] };
@@ -79,6 +80,7 @@ function shell(content) {
         h('a', { href: '#/forms', 'aria-current': path === 'forms' ? 'page' : null }, 'الخطط والتقارير'),
         h('a', { href: '#/plans', 'aria-current': path === 'plans' ? 'page' : null }, 'خطط التحسين'),
         h('a', { href: '#/report', 'aria-current': path === 'report' ? 'page' : null }, 'التقرير النهائي'),
+        h('a', { href: '#/scope', 'aria-current': path === 'scope' ? 'page' : null }, 'نطاق المتطلبات'),
         canDash() && h('a', { href: '#/dashboard', 'aria-current': path === 'dashboard' ? 'page' : null }, 'لوحة المؤشرات')),
       state.cycles.length > 0 && cycleSelect,
       h('div', { class: 'user' },
@@ -90,7 +92,7 @@ function shell(content) {
 
 export async function route() {
   let { path } = parseRoute();
-  if (!['workspace', 'dashboard', 'plans', 'minutes', 'forms', 'report'].includes(path)) {
+  if (!['workspace', 'dashboard', 'plans', 'minutes', 'forms', 'report', 'scope'].includes(path)) {
     path = canDash() ? 'dashboard' : 'workspace';
     history.replaceState(null, '', `#/${path}`);
   }
@@ -104,7 +106,7 @@ export async function route() {
   }
   try {
     const view = path === 'dashboard' ? await renderDashboard() : path === 'plans' ? await renderPlans()
-      : path === 'minutes' ? await renderMinutes() : path === 'forms' ? await renderForms() : path === 'report' ? await renderReport() : await renderWorkspace();
+      : path === 'minutes' ? await renderMinutes() : path === 'forms' ? await renderForms() : path === 'report' ? await renderReport() : path === 'scope' ? await renderScope() : await renderWorkspace();
     mount(content, view);
     content.className = '';
   } catch (ex) {

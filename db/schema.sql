@@ -382,6 +382,34 @@ LANGUAGE sql STABLE AS $$
     FROM requirement r WHERE r.id = p_requirement
 $$;
 
+-- ---------------------------------------------------------------------
+-- نطاق انطباق المتطلبات على القسم: متطلب خارج اختصاص القسم (مثل الإرشاد أو المشروع لقسم الدراسات العامة)
+-- يقرره وكيل الجودة بمسوّغ موثّق؛ يُستبعد من التقديرات والمؤشرات والنماذج وخطط التحسين.
+-- القرار دائم للقسم، ولا يغيّر نتائج دورة مغلقة (يُحتسب بحسب وقت الإغلاق).
+-- ---------------------------------------------------------------------
+CREATE TABLE requirement_exclusion (
+  id                 bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  department_id      bigint NOT NULL REFERENCES department(id),
+  requirement_id     bigint NOT NULL REFERENCES requirement(id),
+  reason_ar          text NOT NULL CHECK (length(btrim(reason_ar)) >= 5),
+  within_model_rule  boolean NOT NULL,           -- يسمح به شرط النجمة في النموذج الرسمي؟
+  decided_by         bigint REFERENCES app_user(id),
+  decided_at         timestamptz NOT NULL DEFAULT clock_timestamp(),
+  revoked_at         timestamptz,
+  revoked_by         bigint REFERENCES app_user(id),
+  CHECK (revoked_at IS NULL OR revoked_at >= decided_at)
+);
+CREATE UNIQUE INDEX ux_requirement_exclusion_active ON requirement_exclusion (department_id, requirement_id) WHERE revoked_at IS NULL;
+
+CREATE FUNCTION is_excluded(p_requirement bigint, p_department bigint, p_cycle bigint) RETURNS boolean
+LANGUAGE sql STABLE AS $$
+  SELECT p_department IS NOT NULL AND EXISTS (
+    SELECT 1 FROM requirement_exclusion e, assessment_cycle c
+     WHERE c.id = p_cycle AND e.department_id = p_department AND e.requirement_id = p_requirement
+       AND e.decided_at <= COALESCE(c.closed_at, 'infinity')
+       AND (e.revoked_at IS NULL OR e.revoked_at > COALESCE(c.closed_at, 'infinity')))
+$$;
+
 -- التقدير الفعلي: الذاتي ما لم يحكم المقيّم بعدم الانطباق؛ «لا ينطبق» بلا شرط يُعد «غير متحقق»
 CREATE FUNCTION effective_rating(p_self rating_t, p_verdict ext_verdict_t, p_na_ok boolean) RETURNS rating_t
 LANGUAGE sql IMMUTABLE AS $$
@@ -537,6 +565,8 @@ BEGIN
     JOIN standard s      ON s.id  = ss.standard_id
    WHERE cd.cycle_id = p_cycle_id AND s.framework_id = v_fw
      AND r.scope = 'department' AND r.is_active
+     AND NOT EXISTS (SELECT 1 FROM requirement_exclusion e
+                      WHERE e.department_id = cd.department_id AND e.requirement_id = r.id AND e.revoked_at IS NULL)
   UNION ALL
   SELECT p_cycle_id, NULL, r.id
     FROM requirement r
@@ -609,7 +639,8 @@ BEGIN
     RAISE EXCEPTION 'إغلاق الدورة من صلاحية وكيل الجودة فقط';
   END IF;
 
-  SELECT count(*) INTO v_open FROM assessment WHERE cycle_id = p_cycle_id AND status <> 'final';
+  SELECT count(*) INTO v_open FROM assessment
+   WHERE cycle_id = p_cycle_id AND status <> 'final' AND NOT is_excluded(requirement_id, department_id, cycle_id);
   IF v_open > 0 THEN
     RAISE EXCEPTION 'لا يمكن الإغلاق: % تقديرات لم تصل للحالة النهائية', v_open;
   END IF;
@@ -647,6 +678,7 @@ WITH base AS (
     JOIN requirement r   ON r.id  = a.requirement_id
     JOIN sub_standard ss ON ss.id = r.sub_standard_id
     JOIN standard s      ON s.id  = ss.standard_id
+   WHERE NOT is_excluded(a.requirement_id, a.department_id, a.cycle_id)
 )
 SELECT b.id AS assessment_id, b.cycle_id, b.department_id, b.status,
        b.standard_id, b.standard_code, b.standard_title, b.sub_standard_id, b.sub_standard_code, b.sub_standard_title,
@@ -1016,6 +1048,7 @@ BEGIN
   SELECT a.cycle_id, a.id, a.department_id, 'auto', 'خطة تحسين المتطلب ' || r.code
     FROM assessment a JOIN requirement r ON r.id = a.requirement_id
    WHERE a.cycle_id = p_cycle_id AND a.status = 'final'
+     AND NOT is_excluded(a.requirement_id, a.department_id, a.cycle_id)
      AND (effective_rating(a.self_rating, a.ext_verdict, na_allowed(a.requirement_id, a.department_id)) IN ('partial','not_met')
           OR (r.evidence_required
               AND effective_rating(a.self_rating, a.ext_verdict, na_allowed(a.requirement_id, a.department_id)) <> 'na'
@@ -1033,6 +1066,7 @@ BEGIN
     INSERT INTO improvement_action (cycle_id, assessment_id, department_id, source, title_ar)
     SELECT NEW.cycle_id, NEW.id, NEW.department_id, 'auto', 'خطة تحسين المتطلب ' || r.code
       FROM requirement r WHERE r.id = NEW.requirement_id
+       AND NOT is_excluded(NEW.requirement_id, NEW.department_id, NEW.cycle_id)
        AND (effective_rating(NEW.self_rating, NEW.ext_verdict, na_allowed(NEW.requirement_id, NEW.department_id)) IN ('partial','not_met')
             OR (r.evidence_required AND NOT EXISTS (SELECT 1 FROM assessment_evidence ae WHERE ae.assessment_id = NEW.id)))
     ON CONFLICT (assessment_id) WHERE source = 'auto' DO NOTHING;
@@ -1653,3 +1687,6 @@ CREATE TRIGGER t_audit_form_attachment AFTER INSERT OR DELETE ON form_attachment
   FOR EACH ROW EXECUTE FUNCTION trg_audit();
 
 COMMIT;
+
+CREATE TRIGGER t_audit_requirement_exclusion AFTER INSERT OR UPDATE ON requirement_exclusion
+  FOR EACH ROW EXECUTE FUNCTION trg_audit();

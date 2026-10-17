@@ -19,6 +19,7 @@ SELECT a.id, a.cycle_id, a.department_id, a.status, a.due_date, a.assigned_to,
   JOIN sub_standard ss ON ss.id = r.sub_standard_id
   JOIN standard s      ON s.id = ss.standard_id
  WHERE a.cycle_id = %(cycle)s
+   AND NOT is_excluded(a.requirement_id, a.department_id, a.cycle_id)
    AND (%(all)s OR a.department_id = ANY(%(depts)s))
    AND (%(dept)s::bigint IS NULL OR a.department_id = %(dept)s)
    AND (%(status)s::aqap.assessment_status_t IS NULL OR a.status = %(status)s)

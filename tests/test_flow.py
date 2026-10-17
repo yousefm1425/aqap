@@ -180,3 +180,31 @@ def test_frontend_support_endpoints(client, auth):
     stds = client.get(f"{API}/cycles/1/reports/standards", headers=auth(DEAN)).json()
     assert stds and all("standard_title" in s for s in stds)
     assert client.get("/app/").status_code == 200
+
+
+def test_requirement_scope_exclusion(client, auth):
+    """متطلب خارج اختصاص القسم: يقرره وكيل الجودة بمسوّغ، فيختفي من تقديرات القسم ومؤشراته، ويعود عند الإلغاء."""
+    tree = client.get(f"{API}/departments/2/applicability", headers=auth(COORD_EE)).json()
+    assert tree["can_edit"] is False and tree["excluded_count"] == 0
+    r3 = next(r for r in tree["requirements"] if r["requirement_code"] == "R3")
+    assert client.get(f"{API}/departments/2/applicability", headers=auth(COORD)).status_code == 404
+    body = {"requirement_ids": [r3["requirement_id"]], "reason_ar": "ليس من اختصاص القسم"}
+    url = f"{API}/departments/2/applicability/exclusions"
+    assert client.post(url, headers=auth(COORD_EE), json=body).status_code == 403
+    r = client.post(url, headers=auth(DEAN), json=body)                    # خارج شرط النجمة → يلزم تأكيد
+    assert r.status_code == 403 and "R3" in r.json()["detail"]
+    r = client.post(url, headers=auth(DEAN), json={**body, "outside_model_rule": True})
+    assert r.status_code == 201 and r.json()["excluded"] == 1
+
+    ee = client.get(f"{API}/cycles/1/assessments", headers=auth(COORD_EE)).json()
+    assert "R3" not in {a["requirement_code"] for a in ee} and len(ee) == 2
+    subs = client.get(f"{API}/cycles/1/reports/sub-standards?department_id=2", headers=auth(DEAN)).json()
+    assert "S1.2" not in {s["sub_standard_code"] for s in subs}            # المعيار الفرعي كله خارج النطاق
+    tree = client.get(f"{API}/departments/2/applicability", headers=auth(DEAN)).json()
+    x = next(r for r in tree["requirements"] if r["requirement_code"] == "R3")
+    assert tree["excluded_count"] == 1 and x["within_model_rule"] is False and x["reason_ar"] == "ليس من اختصاص القسم"
+
+    assert client.delete(f"{url}/{r3['requirement_id']}", headers=auth(DEAN)).status_code == 200
+    ee = client.get(f"{API}/cycles/1/assessments", headers=auth(COORD_EE)).json()
+    assert "R3" in {a["requirement_code"] for a in ee}
+    assert client.delete(f"{url}/{r3['requirement_id']}", headers=auth(DEAN)).status_code == 404

@@ -146,7 +146,13 @@ async def templates(cycle_id: int, department_id: int | None = None, user: Curre
               AND (%(dept)s::bigint IS NULL OR department_id = %(dept)s)""",
         {"c": cycle_id, "all": all_depts, "d": depts, "dept": department_id})
     recs = await cur.fetchall()
-    return [{**t, "records": [r for r in recs if r["template_id"] == t["id"]]} for t in rows]
+    # الأقسام التي استُبعد منها متطلب النموذج (لا يظهر لها النموذج)
+    cur = await conn.execute(
+        """SELECT e.requirement_id, array_agg(e.department_id) AS depts FROM requirement_exclusion e
+            WHERE e.revoked_at IS NULL GROUP BY e.requirement_id""")
+    excl = {r["requirement_id"]: r["depts"] for r in await cur.fetchall()}
+    return [{**t, "excluded_for": excl.get(t["requirement_id"], []),
+             "records": [r for r in recs if r["template_id"] == t["id"]]} for t in rows]
 
 
 @router.post("/cycles/{cycle_id}/forms", status_code=201)

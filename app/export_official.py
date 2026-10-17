@@ -55,16 +55,24 @@ async def build_payload(conn: AsyncConnection, cycle_id: int) -> dict:
     out = []
     for slot, d in enumerate(depts, 1):
         cur = await conn.execute(
-            """SELECT r.code, a.self_rating, a.ext_verdict, a.ext_recommendation
+            """SELECT r.code, a.self_rating, a.ext_verdict, a.ext_recommendation,
+                      is_excluded(a.requirement_id, a.department_id, a.cycle_id) AS excluded
                  FROM assessment a JOIN requirement r ON r.id = a.requirement_id
                 WHERE a.cycle_id = %s AND a.department_id = %s""", (cycle_id, d["id"]))
         ratings = {}
         for a in await cur.fetchall():
+            if a["excluded"]:                       # خارج نطاق القسم بقرار وكالة الجودة
+                ratings[a["code"]] = {"self": SELF_LABEL["na"], "ext": None, "recommendation": None}
+                continue
             entry = {"self": SELF_LABEL.get(a["self_rating"]),
                      "ext": VERDICT_LABEL.get(a["ext_verdict"]),
                      "recommendation": a["ext_recommendation"]}
             if any(entry.values()):
                 ratings[a["code"]] = entry
+        cur = await conn.execute(                   # خارج نطاق القسم بقرار وكالة الجودة → «لا ينطبق»
+            "SELECT r.code FROM requirement r WHERE r.scope = 'department' AND is_excluded(r.id, %s, %s)", (d["id"], cycle_id))
+        for x in await cur.fetchall():
+            ratings[x["code"]] = {"self": SELF_LABEL["na"], "ext": None, "recommendation": None}
         cur = await conn.execute(
             """SELECT r.code, ia.action_ar, ia.owner_label, u.full_name_ar AS owner_name, ia.due_date, ia.status,
                       ia.adequacy, ia.reviewer_notes, ia.verification_note, e.title_ar AS evidence_title
