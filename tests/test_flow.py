@@ -93,6 +93,10 @@ def test_reports(client, auth):
     assert rank["best"] and rank["worst"]
     level = client.get(f"{API}/cycles/1/reports/pass-level", headers=auth(DEAN)).json()
     assert level["passed"] is None and level["threshold_pct"] == 89.5     # التقييم الخارجي لم يكتمل
+    plans = client.get(f"{API}/cycles/1/reports/final-plans", headers=auth(DEAN)).json()
+    r1 = next(p for p in plans if p["assessment_id"] == STATE["a1"])        # جزئي بحكم «غير كافٍ» → يتطلب خطة
+    assert r1["partially_implemented"] and r1["evidence_issue"] and not r1["not_implemented"]
+    assert all(p["department_id"] == 1 for p in client.get(f"{API}/cycles/1/reports/final-plans", headers=auth(COORD)).json())
 
 
 def test_na_requires_star_rule(client, auth):

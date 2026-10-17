@@ -107,3 +107,39 @@ async def invalid_na(cycle_id: int, user: CurrentUser = Depends(current_user), c
     """تقديرات «لا ينطبق» لا يقبلها شرط النجمة في النموذج (تُحسب «غير متحقق»)."""
     return await _rows(conn, user, cycle_id,
                        f"SELECT * FROM v_invalid_na WHERE cycle_id = %(cycle)s AND {_SCOPE} ORDER BY department_id, requirement_code")
+
+
+@router.get("/final-plans")
+async def final_plans(cycle_id: int, department_id: int | None = None,
+                      user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+    """المتطلبات التي تستلزم خطة تحسين في التقرير النهائي، مع سبب الملاحظة:
+    غير منفذ (غير متحقق/جزئي)، أو الشاهد غير متوفر/غير كافٍ، أو خطة التحسين غير داعمة."""
+    return await _rows(conn, user, cycle_id, f"""
+        WITH x AS (
+          SELECT v.assessment_id, v.cycle_id, v.department_id, v.requirement_code, v.eff_rating,
+                 a.ext_verdict, a.ext_recommendation, r.text_ar AS requirement_text,
+                 s.code AS standard_code, ss.code AS sub_standard_code,
+                 (r.evidence_required AND NOT EXISTS (SELECT 1 FROM assessment_evidence ae
+                                                       WHERE ae.assessment_id = v.assessment_id)) AS no_evidence,
+                 ia.id AS action_id, ia.action_ar, ia.owner_label, u.full_name_ar AS owner_name, ia.due_date,
+                 ia.status AS action_status, ia.adequacy, ia.progress_pct, ia.completion_evidence_id
+            FROM v_assessment_scored v
+            JOIN assessment a    ON a.id = v.assessment_id
+            JOIN requirement r   ON r.id = a.requirement_id
+            JOIN sub_standard ss ON ss.id = r.sub_standard_id
+            JOIN standard s      ON s.id = ss.standard_id
+            LEFT JOIN improvement_action ia ON ia.assessment_id = a.id AND ia.status <> 'cancelled'
+            LEFT JOIN app_user u ON u.id = ia.owner_id
+           WHERE v.cycle_id = %(cycle)s AND v.eff_rating IS NOT NULL AND v.eff_rating <> 'na')
+        SELECT x.*, COALESCE(d.name_ar, 'متطلبات المنشأة') AS department_name,
+               (x.eff_rating = 'not_met')                           AS not_implemented,
+               (x.eff_rating = 'partial')                           AS partially_implemented,
+               (x.no_evidence OR x.ext_verdict = 'insufficient')    AS evidence_issue,
+               (x.adequacy IN ('unsuitable','insufficient'))        AS plan_not_supporting
+          FROM x LEFT JOIN department d ON d.id = x.department_id
+         WHERE {_SCOPE.replace('department_id', 'x.department_id')}
+           AND (%(dept)s::bigint IS NULL OR x.department_id = %(dept)s)
+           AND (x.eff_rating IN ('partial','not_met') OR x.no_evidence OR x.ext_verdict = 'insufficient'
+                OR x.adequacy IN ('unsuitable','insufficient'))
+         ORDER BY x.department_id NULLS FIRST, x.standard_code, x.sub_standard_code, x.requirement_code""",
+                       dept=department_id)

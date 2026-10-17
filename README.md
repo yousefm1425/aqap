@@ -162,3 +162,13 @@ AQAP_TEST_ADMIN_URL=postgresql://aqap:aqap@localhost:5432/postgres AQAP_TEST_XLS
 | `GET /cycles/{id}/minutes/templates` · `POST /cycles/{id}/minutes` · `PUT /minutes/{id}` · `POST /minutes/{id}/transition` · `GET /minutes/{id}/pdf` | المحاضر |
 | `POST /minutes/{id}/attachments` · `POST /minutes/{id}/attachments/upload` · `DELETE /minutes/{id}/attachments/{evidence_id}` | الشواهد الداعمة للمحضر |
 | `GET /cycles/{id}/forms/templates` · `POST /cycles/{id}/forms` · `GET/PUT/DELETE /forms/{id}` · `POST /forms/{id}/transition` · `POST /forms/{id}/archive` · `GET /forms/{id}/pdf` · `/forms/{id}/attachments…` | الخطط والتقارير |
+
+## التقرير النهائي (`#/report`)
+
+لوحة نتائج للقسم أو للكلية (متوسط الأقسام) بأساس احتساب: النتيجة النهائية أو التقييم الذاتي أو الخارجي.
+- عدّاد لكل معيار رئيسي (أحمر < 50٪، وردي حتى حد الاجتياز 89.5٪، أخضر فوقه) ودائرة لكل معيار فرعي.
+- أفضل خمسة وأضعف خمسة معايير فرعية، والنسبة العامة للعام التدريبي.
+- جدولا أعداد المتطلبات (متحقق / غير متحقق / يحتاج تحسين) لكل معيار رئيسي وفرعي في كل قسم.
+- «المتطلبات التي تتطلب خطة تحسينية» مع سبب الملاحظة: غير منفذ، أو منفذ جزئياً، أو الشاهد غير متوفر/غير كافٍ، أو خطة التحسين غير داعمة
+  (`GET /cycles/{id}/reports/final-plans`). تتولد الخطة تلقائياً عند الاعتماد النهائي، ويشمل ذلك الآن المتطلب الذي لا يتوفر شاهده المطلوب
+  (ترحيل `003_improvement_missing_evidence.sql`).
