@@ -9,6 +9,12 @@ for _ in $(seq 1 60); do psql "$DB_URL" -qc 'SELECT 1' >/dev/null 2>&1 && break;
 
 if psql "$DB_URL" -tAc "SELECT to_regclass('aqap.assessment')" | grep -q assessment; then
   echo "✓ المخطط موجود مسبقاً"
+  # ترحيلات القاعدة القائمة (كل ملف آمن للتكرار)
+  for f in db/migrations/*.sql; do
+    [ -e "$f" ] || continue
+    psql "$DB_URL" -q -v ON_ERROR_STOP=1 -f "$f" >/dev/null 2>&1 && echo "✓ ترحيل: $(basename "$f")" \
+      || { echo "✗ فشل الترحيل: $f"; psql "$DB_URL" -v ON_ERROR_STOP=1 -f "$f"; exit 1; }
+  done
 else
   psql "$DB_URL" -q -v ON_ERROR_STOP=1 -f db/schema.sql
   if [ -f templates/model.xlsb ]; then

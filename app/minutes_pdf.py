@@ -113,6 +113,19 @@ def render_html(doc: dict) -> str:
                              f"<td>{_e(r.get('fu_obstacles'))}</td><td>{_e(r.get('fu_solutions'))}</td></tr>")
         parts.append("</tbody></table>")
 
+    atts = m.get("attachments") or []
+    if atts:
+        parts.append(f"<h2>الشواهد والتقارير الداعمة</h2><table><thead><tr><th class='num'>م</th>"
+                     f"<th style='width:16%'>رمز الشاهد</th><th>بيان الشاهد</th><th style='width:14%'>النوع</th>"
+                     "<th style='width:22%'>المرجع في بنك الشواهد</th></tr></thead><tbody>")
+        for k, at in enumerate(atts, 1):
+            kind = "رابط" if at.get("kind") == "link" else "ملف"
+            note = f"<br><span class='muted'>{escape(at['note'])}</span>" if at.get("note") else ""
+            parts.append(f"<tr><td class='num'>{k}</td><td>{escape(m['requirement_code'])}</td>"
+                         f"<td>{escape(at['title_ar'])}{note}</td>"
+                         f"<td>{kind}</td><td class='muted'>AQAP-E-{at['evidence_id']}</td></tr>")
+        parts.append("</tbody></table>")
+
     parts.append("<h2>حضر الاجتماع</h2><table><thead><tr><th class='num'>م</th><th>الاسم</th><th style='width:26%'>المهمة</th>"
                  "<th style='width:30%'>التوقيع</th></tr></thead><tbody>")
     for k, at in enumerate(m["attendees"], 1):

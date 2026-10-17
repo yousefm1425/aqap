@@ -135,3 +135,19 @@ class FollowUpIn(BaseModel):
     fu_status: Literal["done", "partial", "not_done"] | None = None
     fu_obstacles: str | None = None
     fu_solutions: str | None = None
+
+
+class MinutesAttachIn(BaseModel):
+    """شاهد داعم للمحضر: شاهد قائم من بنك القسم، أو رابط جديد يُنشأ في البنك ويُرفق."""
+    evidence_id: int | None = None
+    title_ar: str | None = Field(default=None, min_length=3, max_length=300)
+    url: HttpUrl | None = None
+    note: str | None = Field(default=None, max_length=500)
+
+    @model_validator(mode="after")
+    def _one_source(self):
+        if (self.evidence_id is None) == (self.url is None):
+            raise ValueError("حدّد شاهداً من البنك أو رابطاً جديداً (أحدهما فقط)")
+        if self.url is not None and not self.title_ar:
+            raise ValueError("اكتب بيان الشاهد للرابط")
+        return self

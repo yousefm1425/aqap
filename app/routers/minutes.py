@@ -6,14 +6,14 @@
 import hashlib
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, File, Form, UploadFile
 from fastapi.responses import Response
 from psycopg import AsyncConnection
 from starlette.concurrency import run_in_threadpool
 
 from .. import storage
 from ..minutes_pdf import render_pdf
-from ..schemas import FollowUpIn, MinutesCreate, MinutesDoc, MinutesTransitionIn
+from ..schemas import FollowUpIn, MinutesAttachIn, MinutesCreate, MinutesDoc, MinutesTransitionIn
 from ..security import CurrentUser, current_user, forbid, get_conn, load_cycle, not_found
 
 router = APIRouter(tags=["المحاضر"])
@@ -21,6 +21,7 @@ router = APIRouter(tags=["المحاضر"])
 DEPT_ROLES = ("hod", "dept_coordinator", "faculty")
 QUALITY = ("quality_dean", "quality_auditor", "system_admin")
 ROLE_LABEL = {"hod": "رئيس القسم", "dept_coordinator": "منسق الجودة بالقسم", "faculty": "عضو هيئة تدريب"}
+ACTIVE_CYCLE = ("open", "external_review")
 
 
 async def _template_rows(conn: AsyncConnection, cycle: dict) -> list[dict]:
@@ -87,7 +88,21 @@ async def _full(conn: AsyncConnection, minutes_id: int) -> dict:
              FROM minutes_transition h JOIN app_user u ON u.id = h.actor_id WHERE h.minutes_id = %s ORDER BY h.at""",
         (minutes_id,))
     history = await cur.fetchall()
-    return {**doc, "agenda": agenda, "attendees": attendees, "summary": summary, "history": history}
+    cur = await conn.execute(
+        """SELECT ma.id, ma.evidence_id, ma.note, ma.added_at, u.full_name_ar AS added_by_name,
+                  e.title_ar, e.kind::text AS kind, e.url, e.current_version_no, v.file_name, v.size_bytes,
+                  EXISTS (SELECT 1 FROM assessment_evidence ae JOIN assessment a ON a.id = ae.assessment_id
+                            JOIN requirement r ON r.id = a.requirement_id
+                           WHERE ae.evidence_id = ma.evidence_id AND a.cycle_id = %(c)s
+                             AND a.department_id = %(d)s AND r.code = %(code)s) AS linked
+             FROM minutes_attachment ma JOIN evidence e ON e.id = ma.evidence_id
+             LEFT JOIN evidence_version v ON v.evidence_id = e.id AND v.version_no = e.current_version_no
+             LEFT JOIN app_user u ON u.id = ma.added_by
+            WHERE ma.minutes_id = %(m)s ORDER BY ma.added_at, ma.id""",
+        {"m": minutes_id, "c": doc["cycle_id"], "d": doc["department_id"], "code": doc["requirement_code"]})
+    attachments = await cur.fetchall()
+    return {**doc, "agenda": agenda, "attendees": attendees, "summary": summary, "history": history,
+            "attachments": attachments}
 
 
 @router.get("/cycles/{cycle_id}/minutes/templates")
@@ -207,6 +222,31 @@ async def delete_minutes(minutes_id: int, user: CurrentUser = Depends(current_us
     await conn.execute("DELETE FROM minutes WHERE id = %s", (minutes_id,))       # المسودة فقط (قاعدة البيانات)
 
 
+async def _link_to_requirement(conn: AsyncConnection, user: CurrentUser, doc: dict, evidence_id: int,
+                               note: str) -> bool | None:
+    """يربط شاهداً بتقدير المتطلب في القسم؛ ويحترم مسار الاعتماد: يُربط فقط إن كان التقدير لدى القسم.
+
+    True: مربوط (أو كان مربوطاً)، False: التقدير ليس لدى القسم الآن، None: لا تقدير لهذا المتطلب في القسم."""
+    cur = await conn.execute(
+        """SELECT a.id, a.status FROM assessment a JOIN requirement r ON r.id = a.requirement_id
+             JOIN sub_standard ss ON ss.id = r.sub_standard_id JOIN standard s ON s.id = ss.standard_id
+             JOIN assessment_cycle c ON c.id = a.cycle_id AND c.framework_id = s.framework_id
+            WHERE a.cycle_id = %s AND a.department_id = %s AND r.code = %s""",
+        (doc["cycle_id"], doc["department_id"], doc["requirement_code"]))
+    a = await cur.fetchone()
+    if a is None:
+        return None
+    cur = await conn.execute("SELECT 1 FROM assessment_evidence WHERE assessment_id = %s AND evidence_id = %s",
+                             (a["id"], evidence_id))
+    if await cur.fetchone():
+        return True
+    if a["status"] in ("draft", "returned") and doc["cycle_status"] in ACTIVE_CYCLE:
+        await conn.execute("INSERT INTO assessment_evidence (assessment_id, evidence_id, linked_by, note) VALUES (%s, %s, %s, %s)",
+                           (a["id"], evidence_id, user.id, note))
+        return True
+    return False
+
+
 async def _archive(conn: AsyncConnection, user: CurrentUser, minutes_id: int) -> dict:
     """يولّد PDF ويحفظه نسخة في بنك شواهد القسم؛ أول مرة ينشئ الشاهد ويربطه بالمتطلب إن أمكن."""
     doc = await _full(conn, minutes_id)
@@ -236,26 +276,13 @@ async def _archive(conn: AsyncConnection, user: CurrentUser, minutes_id: int) ->
         version = (await cur.fetchone())["version_no"]
     finally:
         await conn.execute("SELECT set_config('aqap.system_op', 'off', true)")
-    # الربط بالمتطلب يحترم مسار الاعتماد: يُربط فقط إن كان التقدير لدى القسم
-    cur = await conn.execute(
-        """SELECT a.id, a.status FROM assessment a JOIN requirement r ON r.id = a.requirement_id
-             JOIN sub_standard ss ON ss.id = r.sub_standard_id JOIN standard s ON s.id = ss.standard_id
-             JOIN assessment_cycle c ON c.id = a.cycle_id AND c.framework_id = s.framework_id
-            WHERE a.cycle_id = %s AND a.department_id = %s AND r.code = %s""",
-        (doc["cycle_id"], doc["department_id"], doc["requirement_code"]))
-    a = await cur.fetchone()
-    if a is not None:
-        cur = await conn.execute("SELECT 1 FROM assessment_evidence WHERE assessment_id = %s AND evidence_id = %s",
-                                 (a["id"], ev_id))
-        if await cur.fetchone():
-            linked = True
-        elif a["status"] in ("draft", "returned") and doc["cycle_status"] in ("open", "external_review"):
-            await conn.execute("INSERT INTO assessment_evidence (assessment_id, evidence_id, linked_by, note) VALUES (%s, %s, %s, %s)",
-                               (a["id"], ev_id, user.id, f"محضر AQAP-M-{minutes_id}"))
-            linked = True
-        else:
-            linked = False
-    return {"evidence_id": ev_id, "version_no": version, "linked_to_requirement": linked}
+    linked = await _link_to_requirement(conn, user, doc, ev_id, f"محضر AQAP-M-{minutes_id}")
+    attached = 0
+    for att in doc["attachments"]:
+        if await _link_to_requirement(conn, user, doc, att["evidence_id"], f"شاهد داعم لمحضر AQAP-M-{minutes_id}"):
+            attached += 1
+    return {"evidence_id": ev_id, "version_no": version, "linked_to_requirement": linked,
+            "attachments_linked": attached}
 
 
 @router.post("/minutes/{minutes_id}/transition")
@@ -325,3 +352,94 @@ async def minutes_pdf(minutes_id: int, user: CurrentUser = Depends(current_user)
     name = f"محضر-{doc['requirement_code']}-رقم-{doc['meeting_no']}.pdf"
     return Response(pdf, media_type="application/pdf",
                     headers={"Content-Disposition": f"inline; filename*=UTF-8''{quote(name)}"})
+
+
+# ---------------------------------------------------------------------------
+# الشواهد والتقارير الداعمة للمحضر
+# ---------------------------------------------------------------------------
+async def _attach_target(conn: AsyncConnection, user: CurrentUser, minutes_id: int) -> dict:
+    m = await _load(conn, user, minutes_id, lock=True)
+    if not _is_dept(user, m):
+        raise forbid("إرفاق الشواهد من صلاحية منسوبي القسم")
+    cur = await conn.execute("SELECT status FROM assessment_cycle WHERE id = %s", (m["cycle_id"],))
+    if (await cur.fetchone())["status"] not in ACTIVE_CYCLE:
+        raise forbid("الدورة ليست مفتوحة")
+    return m
+
+
+async def _attach(conn: AsyncConnection, user: CurrentUser, m: dict, evidence_id: int, note: str | None) -> dict:
+    """يُرفق الشاهد (القاعدة تتحقق من القسم والسرية والحالة)؛ وبعد الاعتماد يُربط بالمتطلب فوراً."""
+    cur = await conn.execute(
+        """INSERT INTO minutes_attachment (minutes_id, evidence_id, note, added_by) VALUES (%s, %s, %s, %s)
+           ON CONFLICT (minutes_id, evidence_id) DO NOTHING RETURNING id""", (m["id"], evidence_id, note, user.id))
+    if await cur.fetchone() is None:
+        raise forbid("الشاهد مرفق بهذا المحضر مسبقاً")
+    linked = None
+    if m["status"] == "approved":
+        doc = await _full(conn, m["id"])
+        linked = await _link_to_requirement(conn, user, doc, evidence_id, f"شاهد داعم لمحضر AQAP-M-{m['id']}")
+    full = await _full(conn, m["id"])
+    return {"attachments": full["attachments"], "evidence_id": evidence_id, "linked_to_requirement": linked}
+
+
+@router.post("/minutes/{minutes_id}/attachments", status_code=201)
+async def attach(minutes_id: int, body: MinutesAttachIn, user: CurrentUser = Depends(current_user),
+                 conn: AsyncConnection = Depends(get_conn)):
+    """إرفاق شاهد قائم من بنك شواهد القسم، أو رابط جديد يُنشأ في البنك ثم يُرفق."""
+    m = await _attach_target(conn, user, minutes_id)
+    if body.evidence_id is not None:
+        cur = await conn.execute("SELECT id FROM evidence WHERE id = %s AND institution_id = %s AND NOT is_archived",
+                                 (body.evidence_id, user.institution_id))
+        if await cur.fetchone() is None:
+            raise not_found("الشاهد غير موجود")
+        ev_id = body.evidence_id
+    else:
+        cur = await conn.execute(
+            """INSERT INTO evidence (institution_id, department_id, title_ar, description_ar, kind, url, created_by)
+               VALUES (%s, %s, %s, %s, 'link', %s, %s) RETURNING id""",
+            (user.institution_id, m["department_id"], body.title_ar,
+             f"شاهد داعم لمحضر AQAP-M-{minutes_id}", str(body.url), user.id))
+        ev_id = (await cur.fetchone())["id"]
+    return await _attach(conn, user, m, ev_id, body.note)
+
+
+@router.post("/minutes/{minutes_id}/attachments/upload", status_code=201)
+async def attach_upload(minutes_id: int, file: UploadFile = File(...), title_ar: str | None = Form(None),
+                        note: str | None = Form(None), user: CurrentUser = Depends(current_user),
+                        conn: AsyncConnection = Depends(get_conn)):
+    """رفع ملف شاهد داعم: يُنشأ في بنك شواهد القسم ويُرفق بالمحضر في خطوة واحدة."""
+    m = await _attach_target(conn, user, minutes_id)
+    if m["status"] == "submitted":                     # نفحصها قبل رفع الملف كي لا يبقى ملف يتيم
+        raise forbid("المحضر بانتظار قرار رئيس القسم؛ أضف الشواهد بعد الاعتماد أو الإعادة")
+    title = (title_ar or "").strip() or (file.filename or "شاهد داعم").rsplit(".", 1)[0]
+    if len(title) < 3:
+        title = f"شاهد داعم — {title}"
+    cur = await conn.execute(
+        """INSERT INTO evidence (institution_id, department_id, title_ar, description_ar, kind, created_by)
+           VALUES (%s, %s, %s, %s, 'file', %s) RETURNING id""",
+        (user.institution_id, m["department_id"], title[:300], f"شاهد داعم لمحضر AQAP-M-{minutes_id}", user.id))
+    ev_id = (await cur.fetchone())["id"]
+    sha256, size, ext = await storage.hash_and_validate(file)
+    key = storage.build_key(user.institution_id, m["department_id"], ev_id, ext)
+    await storage.put_upload(key, file, size)
+    try:
+        await conn.execute(
+            """INSERT INTO evidence_version (evidence_id, version_no, storage_key, file_name, mime_type,
+                                             size_bytes, sha256, change_note, uploaded_by)
+               VALUES (%s, 0, %s, %s, %s, %s, %s, %s, %s)""",
+            (ev_id, key, file.filename, file.content_type, size, sha256, "شاهد داعم للمحضر", user.id))
+        return await _attach(conn, user, m, ev_id, note)
+    except Exception:
+        await storage.remove(key)                      # لا نترك ملفاً يتيماً إذا فشل التسجيل
+        raise
+
+
+@router.delete("/minutes/{minutes_id}/attachments/{evidence_id}", status_code=204)
+async def detach(minutes_id: int, evidence_id: int, user: CurrentUser = Depends(current_user),
+                 conn: AsyncConnection = Depends(get_conn)):
+    """فك ارتباط الشاهد بالمحضر (المسودة أو بعد الإعادة فقط)؛ يبقى الشاهد في بنك القسم."""
+    m = await _attach_target(conn, user, minutes_id)
+    cur = await conn.execute("DELETE FROM minutes_attachment WHERE minutes_id = %s AND evidence_id = %s RETURNING id",
+                             (m["id"], evidence_id))
+    if await cur.fetchone() is None:
+        raise not_found("الشاهد غير مرفق بهذا المحضر")

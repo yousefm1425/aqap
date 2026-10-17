@@ -230,3 +230,12 @@ input[type=text]:disabled, textarea:disabled, select:disabled { background: var(
   .toast { animation: rise .2s ease-out; }
   @keyframes rise { from { transform: translateY(6px); opacity: 0; } }
 }
+
+/* جاهزية المحضر والشواهد الداعمة */
+.checks { list-style: none; margin: .3rem 0 .6rem; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr)); gap: .35rem; }
+.checks li { display: flex; gap: .45rem; align-items: center; font-size: .875rem; padding: .3rem .6rem; border-radius: var(--radius);
+             background: var(--danger-bg); color: var(--danger-ink); }
+.checks li.ok { background: var(--primary-soft); color: var(--primary); }
+.checks li.opt { background: var(--line-2); color: var(--ink-2); }
+.linkish { background: none; border: 0; padding: 0; color: var(--primary); font-weight: 600; cursor: pointer; text-align: start; }
+.linkish:hover { text-decoration: underline; }

@@ -148,7 +148,23 @@ export async function renderMinutes() {
       attendees: m.attendees.map(a => ({ name_ar: a.name_ar, role_ar: a.role_ar ?? '', user_id: a.user_id })),
     };
     let dirty = false;
-    const touch = () => { dirty = true; };
+    const checksEl = h('ul', { class: 'checks', 'aria-label': 'جاهزية المحضر للرفع' });
+    const renderChecks = () => {
+      const recs = draft.agenda.flatMap(a => a.recommendations);
+      const items = [
+        ['تاريخ الاجتماع', Boolean(draft.meeting_date)],
+        ['محور واحد على الأقل', draft.agenda.length > 0],
+        ['توصية لكل محور', draft.agenda.length > 0 && draft.agenda.every(a => a.recommendations.some(r => r.text_ar.trim()))],
+        ['مسؤول تنفيذ لكل توصية', recs.length > 0 && recs.every(r => (r.responsible_ar ?? '').trim())],
+        ['الحضور (عضوان على الأقل)', draft.attendees.length >= 2],
+        ['شواهد داعمة (يُستحسن)', m.attachments.length > 0, true],
+      ];
+      mount(checksEl, items.map(([label, ok, optional]) => h('li', { class: ok ? 'ok' : optional ? 'opt' : '' },
+        h('span', { 'aria-hidden': 'true' }, ok ? '✓' : optional ? '○' : '•'), label,
+        h('span', { class: 'sr-only' }, ok ? ' — مكتمل' : ' — غير مكتمل'))));
+    };
+    renderChecks();
+    const touch = () => { dirty = true; renderChecks(); };
 
     const save = async (quiet = false) => {
       const body = { ...draft, meeting_date: draft.meeting_date || null, start_time: draft.start_time || null,
@@ -275,6 +291,70 @@ export async function renderMinutes() {
         'أنت ضمن الحضور. ', h('button', { class: 'btn small primary', onclick: () => act(
           () => api(`/minutes/${m.id}/attendees/confirm`, { method: 'POST' }), 'أُكّد حضورك') }, 'تأكيد حضوري')));
 
+    // ٣ب) الشواهد والتقارير الداعمة
+    const canAttach = isDept() && ACTIVE.includes(m.cycle_status) && m.status !== 'submitted';
+    const canDetach = canAttach && ['draft', 'returned'].includes(m.status);
+    const attachAct = async (fn, ok) => { if (dirty && editable) await save(true); return act(fn, ok); };
+    const linkedNote = a => (a.linked ? h('span', { class: 'status s-final' }, 'مربوط بالمتطلب')
+      : m.status === 'approved' ? h('span', { class: 'status s-returned', title: 'التقدير ليس لدى القسم الآن' }, 'غير مربوط')
+        : h('span', { class: 'status s-draft' }, 'يُربط عند الاعتماد'));
+    const kb = n => (n == null ? '' : n < 1048576 ? ` · ${num(Math.max(1, Math.round(n / 1024)))} ك.ب` : ` · ${num(n / 1048576)} م.ب`);
+    const attList = m.attachments.length
+      ? h('ul', { class: 'ev-list' }, m.attachments.map(a => h('li', null,
+          h('div', { class: 'grow' },
+            h('button', { type: 'button', class: 'linkish', onclick: async () => {
+              try { const r = await api(`/evidence/${a.evidence_id}/download`); window.open(r.url, '_blank', 'noopener'); }
+              catch (ex) { toast(ex.message, 'error'); } } }, a.title_ar),
+            h('div', { class: 'faint' }, `${a.kind === 'link' ? 'رابط' : (a.file_name ?? 'ملف')}${kb(a.size_bytes)}`
+              + ` · ${a.added_by_name ?? ''} ${dateTime(a.added_at)}${a.note ? ` · ${a.note}` : ''}`)),
+          linkedNote(a),
+          canDetach && h('button', { class: 'btn small danger', 'aria-label': `إزالة ${a.title_ar}`, onclick: () => attachAct(
+            () => api(`/minutes/${m.id}/attachments/${a.evidence_id}`, { method: 'DELETE' }), 'أُزيل الشاهد من المحضر (باقٍ في بنك القسم)') },
+            'إزالة'))))
+      : h('p', { class: 'muted' }, 'لا توجد شواهد داعمة بعد: كشف الحضور الموقّع، صور الاجتماع، العروض والتقارير التي نوقشت…');
+    let attAdder = null;
+    if (canAttach) {
+      const bank = (await api(`/evidence?department_id=${m.department_id}`).catch(() => []))
+        .filter(e => e.confidentiality < 3 && !m.attachments.some(a => a.evidence_id === e.id));
+      const pick = h('select', { class: 'input', 'aria-label': 'شاهد من بنك شواهد القسم' },
+        h('option', { value: '' }, bank.length ? 'أو اختر شاهداً موجوداً في بنك القسم…' : 'لا توجد شواهد أخرى في بنك القسم'),
+        bank.map(e => h('option', { value: String(e.id) }, e.title_ar)));
+      const title = h('input', { type: 'text', placeholder: 'بيان الشاهد، مثال: كشف الحضور الموقّع', 'aria-label': 'بيان الشاهد' });
+      const file = h('input', { type: 'file', 'aria-label': 'ملف الشاهد', multiple: true });
+      const url = h('input', { type: 'text', dir: 'ltr', placeholder: 'أو رابط https://…', 'aria-label': 'رابط الشاهد' });
+      const addNew = () => attachAct(async () => {
+        const files = [...file.files]; const u = url.value.trim(); const t = title.value.trim();
+        if (!files.length && !u) throw new Error('اختر ملفاً أو أدخل رابطاً');
+        if (u) {
+          if (t.length < 3) throw new Error('اكتب بيان الشاهد للرابط (3 أحرف على الأقل)');
+          return api(`/minutes/${m.id}/attachments`, { method: 'POST', body: { title_ar: t, url: u } });
+        }
+        let r = null;
+        for (const f of files) {
+          const form = new FormData();
+          form.append('file', f);
+          if (t && files.length === 1) form.append('title_ar', t);
+          r = await api(`/minutes/${m.id}/attachments/upload`, { method: 'POST', form });
+        }
+        return r;
+      }, r => (r?.linked_to_requirement ? 'أُرفق الشاهد ورُبط بالمتطلب' : 'أُرفق الشاهد بالمحضر'));
+      const addExisting = () => attachAct(async () => {
+        if (!pick.value) throw new Error('اختر شاهداً من القائمة أولاً');
+        return api(`/minutes/${m.id}/attachments`, { method: 'POST', body: { evidence_id: Number(pick.value) } });
+      }, r => (r?.linked_to_requirement ? 'أُرفق الشاهد ورُبط بالمتطلب' : 'أُرفق الشاهد بالمحضر'));
+      attAdder = h('div', { class: 'ev-add' },
+        h('div', { class: 'field' }, title, h('div', { class: 'row' }, file), url),
+        h('button', { class: 'btn primary', style: { alignSelf: 'end' }, onclick: addNew }, 'رفع وإرفاق'),
+        pick, h('button', { class: 'btn', onclick: addExisting, disabled: !bank.length }, 'إرفاق'));
+    }
+    const attachSection = h('section', null,
+      h('h2', null, `الشواهد والتقارير الداعمة (${num(m.attachments.length)})`),
+      h('p', { class: 'faint' }, m.status === 'approved'
+        ? 'ما يُضاف الآن يُربط بالمتطلب فوراً ويظهر في نسخة المتابعة المؤرشفة التالية. لا تُزال الشواهد بعد الاعتماد.'
+        : `تُحفظ في بنك شواهد القسم وتُربط بالمتطلب ${m.requirement_code} مع المحضر عند اعتماده.`),
+      attList, attAdder,
+      m.status === 'submitted' && h('p', { class: 'faint' }, 'المحضر بانتظار قرار رئيس القسم؛ تُضاف الشواهد بعد الاعتماد أو الإعادة.'));
+
     // ٤) متابعة التوصيات (بعد الاعتماد)
     let fuSection = null;
     if (m.status === 'approved') {
@@ -356,12 +436,13 @@ export async function renderMinutes() {
     ownerInput.value = draft.follow_up_owner;
     const flow = h('section', null, h('h2', null, 'الاعتماد'),
       m.status !== 'approved' && field('مسؤول متابعة تنفيذ التوصيات', ownerInput),
+      editable && h('div', null, h('p', { class: 'faint' }, 'جاهزية المحضر للرفع'), checksEl),
       m.status === 'approved' && h('p', null, `اعتمده ${m.approved_by_name} — ${dateTime(m.approved_at)}`),
       h('div', { class: 'row' }, buttons),
       m.history.length > 0 && h('ol', { class: 'timeline' }, m.history.map(x => h('li', null, h('span', null, dateTime(x.at)),
         h('strong', null, STATUS[x.to_status]), h('span', null, `— ${x.actor}`), x.comment && h('q', null, x.comment)))));
 
-    mount(detailEl, header, agendaSection, attSection, fuSection, flow);
+    mount(detailEl, header, agendaSection, attSection, attachSection, fuSection, flow);
   }
 
   await load();

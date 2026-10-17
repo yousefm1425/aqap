@@ -146,3 +146,79 @@ def test_minutes_lifecycle(client):
     assert again["status"] == "returned" and again["summary"]["rec_pending"] == 3
     lst = client.get(f"{API}/cycles/1/minutes", headers=coord).json()
     assert [x["minutes_id"] for x in lst] == [mid]
+
+
+def test_minutes_attachments(client):
+    """الشواهد الداعمة: رابط وملف ومن البنك، قيود القسم والسرية والحالة، والربط بالمتطلب عند الاعتماد وبعده."""
+    coord, hod, ee = (h(client, e) for e in ("coord@ynb", "hod@ynb", "coord.ee@ynb"))
+    tpl = next(t for t in client.get(f"{API}/cycles/1/minutes/templates", headers=coord).json()
+               if t["requirement_code"] == "1-1-1")
+    m = client.post(f"{API}/cycles/1/minutes", headers=coord, json={"template_id": tpl["id"], "department_id": 1}).json()
+    mid = m["id"]
+    att = lambda who, **body: client.post(f"{API}/minutes/{mid}/attachments", headers=who, json=body)
+    up = lambda who, name="كشف-الحضور.pdf", **form: client.post(
+        f"{API}/minutes/{mid}/attachments/upload", headers=who, data=form,
+        files={"file": (name, b"%PDF-1.4 attendance sheet", "application/pdf")})
+
+    # رابط جديد ورفع ملف
+    r = att(coord, title_ar="صور الاجتماع", url="https://drive.example.com/meeting-photos", note="ألبوم الاجتماع")
+    assert r.status_code == 201, r.text
+    link_ev = r.json()["evidence_id"]
+    r = up(coord, title_ar="كشف الحضور الموقّع")
+    assert r.status_code == 201, r.text
+    file_ev = r.json()["evidence_id"]
+    items = r.json()["attachments"]
+    assert [a["title_ar"] for a in items] == ["صور الاجتماع", "كشف الحضور الموقّع"]
+    assert items[0]["kind"] == "link" and items[1]["file_name"] == "كشف-الحضور.pdf" and items[1]["linked"] is False
+
+    # قيود: مكرر، قسم آخر، شاهد سري، مصدران معاً، نوع ملف، مستخدم من قسم آخر
+    assert att(coord, evidence_id=link_ev).status_code == 403
+    other = client.post(f"{API}/evidence", headers=ee, json={"title_ar": "شاهد الكهرباء", "kind": "link",
+                                                            "url": "https://x.example.com/ee", "department_id": 2}).json()
+    r = att(coord, evidence_id=other["id"])
+    assert r.status_code == 409 and "القسم نفسه" in r.json()["detail"]
+    secret = client.post(f"{API}/evidence", headers=coord, json={"title_ar": "تقرير سري", "kind": "link",
+                                                                "url": "https://x.example.com/s", "department_id": 1,
+                                                                "confidentiality": 3}).json()
+    assert "السرية" in att(coord, evidence_id=secret["id"]).json()["detail"]
+    assert att(coord, evidence_id=link_ev, url="https://x.example.com", title_ar="مزدوج").status_code == 422
+    assert up(coord, name="script.exe").status_code == 415
+    assert att(ee, title_ar="محاولة", url="https://x.example.com").status_code == 404
+
+    # بانتظار الاعتماد: لا إضافة ولا إزالة
+    doc = {"title_ar": m["title_ar"], "semester": "الأول", "meeting_date": "2026-10-05", "start_time": "11:00 ص",
+           "location_ar": "قاعة القسم", "follow_up_owner": "رئيس القسم",
+           "agenda": [{"title_ar": "المبادرات", "recommendations": [
+               {"text_ar": "اعتماد خطة المبادرات", "responsible_ar": "رئيس القسم", "period_ar": "الأسبوع الأول"}]}],
+           "attendees": [{"name_ar": a["name_ar"], "role_ar": a["role_ar"], "user_id": a["user_id"]} for a in m["attendees"]]}
+    assert client.put(f"{API}/minutes/{mid}", headers=coord, json=doc).status_code == 200
+    tr = lambda who, to, **kw: client.post(f"{API}/minutes/{mid}/transition", headers=who, json={"to_status": to, **kw})
+    assert tr(coord, "submitted").status_code == 200
+    assert att(coord, title_ar="متأخر", url="https://x.example.com/late").status_code == 409
+    assert up(coord).status_code == 403
+    assert client.delete(f"{API}/minutes/{mid}/attachments/{link_ev}", headers=coord).status_code == 409
+
+    # بعد الإعادة تُزال، ثم الاعتماد يربط المحضر والشاهد الداعم المتبقي بالمتطلب
+    assert tr(hod, "returned", comment="أزل الرابط غير الضروري").status_code == 200
+    assert client.delete(f"{API}/minutes/{mid}/attachments/{link_ev}", headers=coord).status_code == 204
+    assert client.delete(f"{API}/minutes/{mid}/attachments/{link_ev}", headers=coord).status_code == 404
+    assert client.get(f"{API}/evidence/{link_ev}/versions", headers=coord).status_code == 200   # باقٍ في البنك
+    before = next(a for a in client.get(f"{API}/cycles/1/assessments", headers=coord).json()
+                  if a["requirement_code"] == "1-1-1")["evidence_count"]
+    assert tr(coord, "submitted").status_code == 200
+    r = tr(hod, "approved")
+    assert r.status_code == 200, r.text
+    arch = r.json()["archive"]
+    assert arch["linked_to_requirement"] is True and arch["attachments_linked"] == 1
+    after = next(a for a in client.get(f"{API}/cycles/1/assessments", headers=coord).json()
+                 if a["requirement_code"] == "1-1-1")["evidence_count"]
+    assert after == before + 2                                    # PDF المحضر + كشف الحضور
+
+    # بعد الاعتماد: شواهد المتابعة تُضاف وتُربط فوراً، ولا تُزال
+    r = att(coord, title_ar="تقرير تنفيذ المبادرات", url="https://drive.example.com/report")
+    assert r.status_code == 201 and r.json()["linked_to_requirement"] is True
+    assert client.delete(f"{API}/minutes/{mid}/attachments/{file_ev}", headers=coord).status_code == 409
+    full = client.get(f"{API}/minutes/{mid}", headers=hod).json()
+    assert len(full["attachments"]) == 2 and all(a["linked"] for a in full["attachments"])
+    pdf = client.get(f"{API}/minutes/{mid}/pdf", headers=hod)
+    assert pdf.status_code == 200 and pdf.content.startswith(b"%PDF")
