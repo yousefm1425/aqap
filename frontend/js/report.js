@@ -24,11 +24,13 @@ function gauge(value) {
   const pt = (p, rad = r) => { const a = Math.PI * (1 - p / 100); return [cx + rad * Math.cos(a), cy - rad * Math.sin(a)]; };
   const arc = (a, b) => { const [x1, y1] = pt(a), [x2, y2] = pt(b); return `M${x1} ${y1} A${r} ${r} 0 0 1 ${x2} ${y2}`; };
   const v = value == null ? 0 : Math.max(0, Math.min(100, Number(value)));
-  const [nx, ny] = pt(v, r - 6);
+  const [nx, ny] = pt(v, r - 22);
   return s('svg', { viewBox: '0 0 200 115', class: 'gauge', role: 'img', 'aria-label': `النسبة ${pct(value)}` },
     s('path', { d: arc(0, 50), class: 'z-bad', 'stroke-width': w, fill: 'none' }),
     s('path', { d: arc(50, PASS), class: 'z-mid', 'stroke-width': w, fill: 'none' }),
     s('path', { d: arc(PASS, 100), class: 'z-good', 'stroke-width': w, fill: 'none' }),
+    v > 0.5 && s('path', { d: arc(0, v), class: `z-val t-${tone(value)}`, 'stroke-width': w - 12, fill: 'none', 'stroke-linecap': 'round' }),
+    s('text', { x: 18, y: 113, class: 'gl' }, '0'), s('text', { x: 182, y: 113, class: 'gl' }, '100'),
     value != null && s('line', { x1: cx, y1: cy, x2: nx, y2: ny, class: 'needle' }),
     s('circle', { cx, cy, r: 6, class: 'hub' }));
 }
@@ -126,9 +128,22 @@ export async function renderReport() {
       Object.entries(BASIS).map(([k, v]) => h('option', { value: k, selected: k === basis }, v)))),
     h('button', { class: 'btn', onclick: () => window.print() }, 'طباعة / PDF'));
 
-  const head = h('div', { class: 'dash-head' },
-    h('div', null, h('h1', null, 'التقرير النهائي'),
-      h('p', { class: 'muted' }, `${cycle.title_ar} · ${scopeName} · ${BASIS[basis]}`)), controls);
+  const inSubs = subs.filter(inScope);
+  const tot = f => inSubs.reduce((a, x) => a + Number(x[f] ?? 0), 0);
+  const myPlansCount = plans.filter(p => (scopeKey === 'all' ? p.department_id != null : p.department_id === scopeKey)).length;
+  const kpi = (label, value, cls) => h('div', { class: `kpi ${cls}` }, h('b', null, value), h('span', null, label));
+  const head = h('header', { class: 'hero' },
+    h('div', { class: 'hero-top' },
+      h('div', null, h('span', { class: 'eyebrow' }, 'نظام جودة التدريب · المستوى الثاني'),
+        h('h1', null, 'التقرير النهائي'),
+        h('p', null, `${cycle.title_ar} · ${scopeName} · ${BASIS[basis]}`)), controls),
+    h('div', { class: 'kpis' },
+      kpi('النسبة العامة', pct(overall == null ? null : Math.round(overall)), `t-${tone(overall)}`),
+      kpi('متطلبات متحققة', num(tot('met_count')), 'k-good'),
+      kpi('تحتاج تحسين', num(tot('partial_count')), 'k-mid'),
+      kpi('غير متحققة', num(tot('not_met_count')), 'k-bad'),
+      kpi('خطط تحسين مطلوبة', num(myPlansCount), 'k-plan')));
+  const title = (n, t, sub) => h('div', { class: 'sec-title' }, h('i', null, n), h('div', null, h('h2', null, t), sub && h('p', null, sub)));
 
   const gauges = h('section', { class: 'gauges' }, stdCodes.map(([code, title], i) => {
     const v = stdVal(code);
@@ -136,7 +151,7 @@ export async function renderReport() {
       h('strong', null, pct(v == null ? null : Math.round(v))), h('span', { class: 'tag' }, `المعيار ${ORDINAL[i] ?? code}`));
   }));
 
-  const rings = h('section', { class: 'panel rings' }, subList.map(x =>
+  const rings = h('section', { class: 'card rings' }, subList.map(x =>
     h('div', { class: 'ringcell', title: x.sub_standard_title },
       h('small', null, `${x.sub_standard_code} ${x.sub_standard_title}`), ring(subVal(x.sub_standard_code)))));
 
@@ -145,12 +160,12 @@ export async function renderReport() {
       : h('p', { class: 'muted' }, 'لا توجد تقديرات بعد'));
   const summary = h('section', { class: 'summary3' },
     rankList(best, 'good', 'مجال القوة (أفضل خمسة معايير فرعية)'),
-    h('div', { class: 'overall' }, ring(overall, 170), h('span', null, `العام التدريبي ${cycle.academic_year}`),
+    h('div', { class: 'overall' }, ring(overall, 180), h('span', null, `العام التدريبي ${cycle.academic_year}`),
       h('span', { class: 'muted' }, overall == null ? '' : overall >= PASS ? 'مجتاز' : 'دون حد الاجتياز (89.5%)')),
     rankList(worst, 'bad', 'مجال التحسين (أضعف خمسة معايير فرعية)'));
 
   const tDepts = scopeKey === 'all' ? depts : [scopeKey];
-  const tables = h('section', { class: 'panel' }, h('h2', null, 'أعداد المتطلبات حسب نتيجة التقييم'),
+  const tables = h('section', { class: 'card' },
     countsTable('المعيار الرئيسي', stdCodes.map(([c]) => c), x => x.standard_code,
       c => stdCodes.find(([k]) => k === c)?.[1] ?? c, tDepts, subs),
     countsTable('المعيار الفرعي', subList.map(x => x.sub_standard_code), x => x.sub_standard_code,
@@ -158,14 +173,19 @@ export async function renderReport() {
 
   const myPlans = plans.filter(p => (scopeKey === 'all' ? p.department_id != null : p.department_id === scopeKey));
   const noPlan = myPlans.filter(p => !p.action_id).length;
-  const plansSec = h('section', { class: 'panel' },
+  const plansSec = h('section', { class: 'card' },
     h('div', { class: 'row', style: { justifyContent: 'space-between' } },
-      h('h2', null, `المتطلبات التي تتطلب خطة تحسينية (${num(myPlans.length)})`),
+      h('h3', { class: 'card-h' }, `المتطلبات التي عليها ملاحظات (${num(myPlans.length)})`),
       noPlan > 0 && h('span', { class: 'chip c-bad' }, `${num(noPlan)} متطلب دون خطة بعد`)),
     h('p', { class: 'muted' }, 'تُعد خطة التحسين لكل متطلب عليه ملاحظة: غير منفذ، أو الشاهد غير متوفر أو غير كافٍ، أو خطة التحسين غير داعمة. '
       + 'الخطة تتولد تلقائياً عند الاعتماد النهائي للتقدير، ويعبّئها القسم من صفحة «خطط التحسين».'),
     myPlans.length ? planGroups(myPlans, scopeKey)
       : h('p', { class: 'empty' }, 'لا توجد متطلبات عليها ملاحظات في هذا النطاق.'));
 
-  return h('div', { class: 'final-report' }, head, gauges, rings, summary, tables, plansSec);
+  return h('div', { class: 'final-report' }, head,
+    title('١', 'المعايير الرئيسية', 'حد الاجتياز 89.5% — الأخضر مجتاز، والوردي يحتاج تحسيناً، والأحمر أقل من 50%'), gauges,
+    title('٢', 'المعايير الفرعية'), rings,
+    title('٣', 'مجالات القوة والتحسين'), summary,
+    title('٤', 'أعداد المتطلبات حسب نتيجة التقييم'), tables,
+    title('٥', 'المتطلبات التي تتطلب خطة تحسينية'), plansSec);
 }
