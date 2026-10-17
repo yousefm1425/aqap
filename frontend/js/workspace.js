@@ -133,6 +133,11 @@ export async function renderWorkspace() {
         h('span', { class: 'code' }, a.requirement_code),
         h('span', { class: 'meta' },
           missingEvidence(a) && h('span', { class: 'faint', title: 'يستلزم شاهداً' }, 'بلا شاهد'),
+          a.deadline && ['draft', 'returned'].includes(a.status) && (() => {
+            const days = Math.round((new Date(a.deadline) - new Date(new Date().toDateString())) / 864e5);
+            return h('span', { class: `due ${days < 0 ? 'late' : days <= 7 ? 'soon' : ''}`, title: `موعد الإنجاز ${date(a.deadline)}` },
+              days < 0 ? `متأخر ${num(-days)} يوم` : days === 0 ? 'ينتهي اليوم' : `باقي ${num(days)} يوم`);
+          })(),
           h('span', { class: `status s-${a.status}` }, STATUS[a.status])),
         h('span', { class: 'text' }, a.requirement_text)));
     }

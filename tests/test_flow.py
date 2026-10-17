@@ -208,3 +208,32 @@ def test_requirement_scope_exclusion(client, auth):
     ee = client.get(f"{API}/cycles/1/assessments", headers=auth(COORD_EE)).json()
     assert "R3" in {a["requirement_code"] for a in ee}
     assert client.delete(f"{url}/{r3['requirement_id']}", headers=auth(DEAN)).status_code == 404
+
+
+def test_calendar(client, auth):
+    """تقويم الإنجاز: يرفعه وكيل الجودة (إدخال أو ملف)، ويحتسب إنجاز الأقسام، والموعد الأخص يغلب."""
+    url = f"{API}/cycles/1/calendar"
+    body = {"target_code": "S1.1", "due_on": "2026-11-30", "starts_on": "2026-10-01", "note_ar": "قبل نهاية الفصل"}
+    assert client.post(url, headers=auth(COORD), json=body).status_code == 403
+    assert client.post(url, headers=auth(DEAN), json={**body, "target_code": "X9"}).status_code == 404
+    assert client.post(url, headers=auth(DEAN), json=body).status_code == 201
+    assert client.post(url, headers=auth(DEAN), json={**body, "due_on": "2026-12-15"}).status_code == 201   # تحديث لا تكرار
+    cal = client.get(url, headers=auth(DEAN)).json()
+    s11 = next(d for d in cal["deadlines"] if d["target_code"] == "S1.1")
+    assert cal["can_edit"] and len(cal["deadlines"]) == 1 and s11["due_on"] == "2026-12-15"
+    assert s11["total"] == 4 and s11["target_kind"] == "sub_standard"          # R1، R2 × قسمين
+    mine = client.get(url, headers=auth(COORD)).json()["deadlines"][0]
+    assert mine["total"] == 2 and mine["done"] >= 1                           # R1 للحاسب معتمد نهائياً
+
+    csv_text = "﻿الرمز,الاسم,البدء,الانتهاء,القسم,ملاحظات\nR3,,,20/01/2027,EE,\nS1.2,,,2027-02-01,,\nZZ,,,2027-01-01,,\nR1,,,غداً,,\n"
+    r = client.post(f"{url}/import", headers=auth(DEAN), files={"file": ("cal.csv", csv_text.encode(), "text/csv")})
+    out = r.json()
+    assert r.status_code == 200 and out["imported"] == 2 and len(out["errors"]) == 2
+    a_ee = client.get(f"{API}/cycles/1/assessments", headers=auth(COORD_EE)).json()
+    assert next(a for a in a_ee if a["requirement_code"] == "R3")["deadline"] == "2027-01-20"   # المتطلب + القسم يغلب
+    a_cs = client.get(f"{API}/cycles/1/assessments", headers=auth(COORD)).json()
+    assert next(a for a in a_cs if a["requirement_code"] == "R3")["deadline"] == "2027-02-01"
+    assert client.get(f"{url}/template", headers=auth(DEAN)).text.lstrip("﻿").startswith("الرمز")
+    did = s11["id"]
+    assert client.delete(f"{API}/calendar/{did}", headers=auth(COORD)).status_code == 403
+    assert client.delete(f"{API}/calendar/{did}", headers=auth(DEAN)).status_code == 200

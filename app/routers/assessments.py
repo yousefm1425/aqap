@@ -13,7 +13,8 @@ SELECT a.id, a.cycle_id, a.department_id, a.status, a.due_date, a.assigned_to,
        na_allowed(a.requirement_id, a.department_id) AS na_ok,
        s.code AS standard_code, ss.code AS sub_standard_code, ss.title_ar AS sub_standard_title,
        r.id AS requirement_id, r.code AS requirement_code, r.text_ar AS requirement_text, r.evidence_required,
-       (SELECT count(*) FROM assessment_evidence ae WHERE ae.assessment_id = a.id) AS evidence_count
+       (SELECT count(*) FROM assessment_evidence ae WHERE ae.assessment_id = a.id) AS evidence_count,
+       (SELECT ad.due_on FROM v_assessment_deadline ad WHERE ad.assessment_id = a.id) AS deadline
   FROM assessment a
   JOIN requirement r   ON r.id = a.requirement_id
   JOIN sub_standard ss ON ss.id = r.sub_standard_id
