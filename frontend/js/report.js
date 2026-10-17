@@ -153,10 +153,10 @@ export async function renderReport() {
 
   const rings = h('section', { class: 'card rings' }, subList.map(x =>
     h('div', { class: 'ringcell', title: x.sub_standard_title },
-      h('small', null, `${x.sub_standard_code} ${x.sub_standard_title}`), ring(subVal(x.sub_standard_code)))));
+      h('small', null, h('bdi', { class: 'ssub-code' }, x.sub_standard_code), h('br'), x.sub_standard_title), ring(subVal(x.sub_standard_code)))));
 
   const rankList = (items, cls, label) => h('div', { class: `rankbox ${cls}` }, h('h3', null, label),
-    items.length ? h('ol', null, items.map(x => h('li', null, h('span', null, `${x.sub_standard_code} ${x.sub_standard_title}`), h('b', null, pct(Math.round(x.v))))))
+    items.length ? h('ol', null, items.map(x => h('li', null, h('span', null, h('bdi', { class: 'ssub-code' }, x.sub_standard_code), ' ', x.sub_standard_title), h('b', null, pct(Math.round(x.v))))))
       : h('p', { class: 'muted' }, 'لا توجد تقديرات بعد'));
   const summary = h('section', { class: 'summary3' },
     rankList(best, 'good', 'مجال القوة (أفضل خمسة معايير فرعية)'),
@@ -169,7 +169,7 @@ export async function renderReport() {
     countsTable('المعيار الرئيسي', stdCodes.map(([c]) => c), x => x.standard_code,
       c => stdCodes.find(([k]) => k === c)?.[1] ?? c, tDepts, subs),
     countsTable('المعيار الفرعي', subList.map(x => x.sub_standard_code), x => x.sub_standard_code,
-      c => { const x = subList.find(y => y.sub_standard_code === c); return `${c} ${x?.sub_standard_title ?? ''}`; }, tDepts, subs));
+      c => { const x = subList.find(y => y.sub_standard_code === c); return h('span', null, h('bdi', { class: 'ssub-code' }, c), ' ', x?.sub_standard_title ?? ''); }, tDepts, subs));
 
   const myPlans = plans.filter(p => (scopeKey === 'all' ? p.department_id != null : p.department_id === scopeKey));
   const noPlan = myPlans.filter(p => !p.action_id).length;

@@ -428,3 +428,6 @@ table.counts td:nth-child(3n+1) { color: #B7811A; font-weight: 700; }
   background: #17302B; color: #fff; border-radius: 999px; box-shadow: 0 12px 30px -10px rgba(0,0,0,.4); z-index: 5; }
 .scope-bar .btn { border-radius: 999px; }
 .topbar nav a { padding: .35rem .55rem; font-size: .92rem; }
+.ssub-code { direction: ltr; unicode-bidi: isolate; display: inline-block; }
+.ringcell small { min-height: 4.7em; display: block; }
+.ringcell small .ssub-code { margin-bottom: .15rem; }

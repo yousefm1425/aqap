@@ -87,7 +87,7 @@ export async function renderScope() {
         details.open = true; updateBar();
       } }, 'تحديد المعيار الفرعي كاملاً');
       const details = h('details', { class: `ssub${all ? ' all-ex' : ''}`, open: exN > 0 && !all },
-        h('summary', null, h('span', { class: 'ssub-code' }, code), h('span', { class: 'ssub-title' }, sub.title),
+        h('summary', null, h('bdi', { class: 'ssub-code' }, code), h('span', { class: 'ssub-title' }, sub.title),
           h('span', { class: 'ssub-count' }, all ? 'خارج نطاق القسم' : exN ? `${num(exN)} من ${num(sub.reqs.length)} مستبعد` : `${num(sub.reqs.length)} متطلب`),
           pickAll),
         h('ul', null, sub.reqs.map(reqRow)));
@@ -107,7 +107,7 @@ export async function renderScope() {
             h('span', null, h('b', null, num(data.excluded_count)), ' خارج النطاق')))),
       !edit && h('p', { class: 'notice' }, 'للاطلاع فقط: طلب تعديل نطاق القسم يُرفع لوكالة الجودة.'),
       [...tree].map(([code, st]) => h('section', { class: 'card sstd' },
-        h('h2', null, h('span', { class: 'ssub-code' }, code), ' ', st.title),
+        h('h2', null, h('bdi', { class: 'ssub-code' }, code), ' ', st.title),
         [...st.subs].map(([c, sub]) => subBlock(c, sub)))),
       bar);
     updateBar();
