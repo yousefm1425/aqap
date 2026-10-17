@@ -33,6 +33,7 @@ export function evalRow(e, row) {
       const d = sum(dens.filter(x => x != null));
       return !d ? null : sum(nums.filter(x => x != null)) / d;
     }
+    case 'mul': { const v = e.of.map(x => num(row[x])); return v.some(x => x == null) ? null : v.reduce((a, b) => a * b, 1); }
     case 'add': { const v = e.of.map(x => num(row[x])).filter(x => x != null); return v.length ? sum(v) : null; }
     case 'sub': { const a = num(row[e.a]), b = num(row[e.b]); return a == null || b == null ? null : a - b; }
     case 'avg': { const v = e.of.map(x => num(row[x])).filter(x => x != null); return v.length ? sum(v) / v.length : null; }
@@ -52,6 +53,16 @@ const match = (row, cond) => Object.entries(cond).every(([k, v]) => (Array.isArr
 
 export function evalSummary(e, rows, tables = {}) {
   switch (e.op) {
+    case 'avg_cells': {
+      const v = rows.flatMap(r => e.cols.map(c => num(r[c]))).filter(x => x != null);
+      return !v.length ? null : (sum(v) / v.length) * (e.scale ?? 1);
+    }
+    case 'band_of': {
+      const v = evalSummary(e.of, rows, tables);
+      if (v == null) return null;
+      for (const [lo, hi, label] of e.bands) if (v >= lo && (hi == null || v < hi)) return label;
+      return null;
+    }
     case 'count_match': return rows.filter(r => match(r, e.match)).length;
     case 'ratio_match': {
       const den = rows.filter(r => match(r, e.den)).length;

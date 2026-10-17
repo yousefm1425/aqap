@@ -71,7 +71,8 @@ def test_executive_plan_lifecycle(client):
     assert [t["requirement_code"] for t in tpls] == ["1-1-2", "1-2-2", "1-2-3", "1-3-2", "1-3-3", "1-3-4", "1-4-1", "1-4-2",
                                                      "2-1-1", "2-1-3", "2-2-1", "2-2-2", "2-2-4", "2-2-5", "2-2-6", "2-2-7",
                                                      "2-2-9", "2-2-10", "3-1-2", "3-2-2", "3-2-5", "3-3-2", "4-1-2", "4-1-3",
-                                                     "4-2-1", "4-2-2", "4-3-1"]
+                                                     "4-2-1", "4-2-2", "4-3-1", "5-1-1", "5-1-2", "5-1-3", "5-2-1",
+                                                     "6-2-1", "6-3-1", "6-4-1"]
     t132 = next(t for t in tpls if t["requirement_code"] == "1-3-2")
     assert t132["sub_standard_code"] == "1-3" and t132["kind"] == "plan" and t132["records"] == []
 
@@ -233,7 +234,39 @@ SAMPLES = {
                               "trainees_present": 360, "sections": 50, "sections_done": 50},
                              {"semester": "الأول", "week": "الثاني", "trainers": 20, "trainers_present": 20, "trainees": 400,
                               "trainees_present": 380, "sections": 50, "sections_done": 48}]}),
+    "5-1-3": ({}, {"elements": [
+        {"building": "13404", "element": "فاعلية الإضاءة", "corridors": 2, "stores": 2, "halls": 2},
+        {"building": "13404", "element": "فاعلية التهوية", "corridors": 2, "stores": 1, "halls": 1},
+        {"building": "13405", "element": "سلامة الأسقف", "corridors": 0, "stores": 1, "halls": 0}]}),
+    "6-3-1": ({"risks": [{"id": "r1", "risk": "انقطاع الكهرباء", "impact": 4, "likelihood": 3},
+                         {"id": "r2", "risk": "تعطل الشبكة", "impact": 2, "likelihood": 2}]}, {}),
+    "6-4-1": ({"kpis": [{"id": "k01", "target": 0.9, "period": "فصلي"}, {"id": "k45", "target": 0.8, "period": "سنوي"}]},
+              {"kpis": {"k01": {"achieved": 0.72}, "k45": {"achieved": 0.8}}}),
 }
+
+
+def test_standard5_6_formulas():
+    from app.form_templates import TEMPLATES
+    from app.forms_engine import clean_follow, clean_plan, compute, empty_plan
+    def run(code):
+        t = next(x for x in TEMPLATES if x["requirement_code"] == code)
+        p, f = SAMPLES[code]
+        plan = clean_plan(t["schema"], {**empty_plan(t["schema"]), **p})
+        return compute(t["schema"], plan, clean_follow(t["schema"], plan, f))
+    r = run("5-1-3")
+    assert [x["rating"] for x in r["tables"]["elements"]] == ["ممتاز", "متوسط", "ضعيف"]       # 100٪، 67٪، 17٪ كما في الملف
+    b = {g["group"]: g["values"] for g in r["pivots"]["by_building"]}
+    assert round(b["13404"]["efficiency"], 4) == 0.8333 and b["13404"]["rating"] == "متوسط" and b["13405"]["rating"] == "ضعيف"
+    assert round(r["summaries"]["elements"]["efficiency"], 4) == round(11 / 18, 4)
+    r = run("6-3-1")
+    assert [(x["score"], x["level"]) for x in r["tables"]["risks"]] == [(12, "مرتفع"), (4, "منخفض")]
+    assert r["summaries"]["risks"]["high"] == 1
+    r = run("6-4-1")
+    rows = r["tables"]["kpis"]
+    assert len(rows) == 45 and rows[0]["standard"] == "القيادة الإدارية" and rows[-1]["standard"] == "الاستدامة"
+    assert round(rows[0]["ratio"], 6) == 0.8 and round(r["summaries"]["kpis"]["avg_ratio"], 6) == 0.9
+    piv = {g["group"]: g["values"]["avg_ratio"] for g in r["pivots"]["by_standard"]}
+    assert round(piv["القيادة الإدارية"], 6) == 0.8 and piv["البيئة التدريبية"] is None
 
 
 def test_standard3_4_formulas():

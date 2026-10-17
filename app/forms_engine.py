@@ -223,6 +223,14 @@ def eval_row(expr: dict, row: dict) -> Any:
             return None
         d = sum(x for x in dens if x is not None)
         return None if not d else sum(x for x in nums if x is not None) / d
+    if op == "mul":
+        vals = [_num(row.get(x)) for x in expr["of"]]
+        if any(v is None for v in vals):
+            return None
+        out = 1.0
+        for v in vals:
+            out *= v
+        return out
     if op == "add":
         vals = [n for n in (_num(row.get(x)) for x in expr["of"]) if n is not None]
         return sum(vals) if vals else None
@@ -259,6 +267,17 @@ def _match(row: dict, cond: dict) -> bool:
 
 def eval_summary(expr: dict, rows: list[dict], tables: dict | None = None) -> Any:
     op = expr["op"]
+    if op == "avg_cells":
+        vals = [n for n in (_num(r.get(c)) for r in rows for c in expr["cols"]) if n is not None]
+        return None if not vals else sum(vals) / len(vals) * expr.get("scale", 1)
+    if op == "band_of":
+        v = eval_summary(expr["of"], rows, tables)
+        if v is None:
+            return None
+        for lo, hi, label in expr["bands"]:
+            if v >= lo and (hi is None or v < hi):
+                return label
+        return None
     if op == "count_match":
         return sum(1 for r in rows if _match(r, expr["match"]))
     if op == "ratio_match":
