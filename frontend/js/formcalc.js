@@ -33,7 +33,7 @@ export function evalRow(e, row) {
       const d = sum(dens.filter(x => x != null));
       return !d ? null : sum(nums.filter(x => x != null)) / d;
     }
-    case 'mul': { const v = e.of.map(x => num(row[x])); return v.some(x => x == null) ? null : v.reduce((a, b) => a * b, 1); }
+    case 'mul': { const v = e.of.map(x => num(e.map ? e.map[row[x]] : row[x])); return v.some(x => x == null) ? null : v.reduce((a, b) => a * b, 1); }
     case 'add': { const v = e.of.map(x => num(row[x])).filter(x => x != null); return v.length ? sum(v) : null; }
     case 'sub': { const a = num(row[e.a]), b = num(row[e.b]); return a == null || b == null ? null : a - b; }
     case 'avg': { const v = e.of.map(x => num(row[x])).filter(x => x != null); return v.length ? sum(v) / v.length : null; }
@@ -53,6 +53,11 @@ const match = (row, cond) => Object.entries(cond).every(([k, v]) => (Array.isArr
 
 export function evalSummary(e, rows, tables = {}) {
   switch (e.op) {
+    case 'count_filled_any': return rows.filter(r => e.cols.some(c => !isEmpty(r[c]))).length;
+    case 'ratio_filled': {
+      const den = rows.filter(r => e.den.some(c => !isEmpty(r[c])));
+      return !den.length ? null : den.filter(r => !isEmpty(r[e.num])).length / den.length;
+    }
     case 'avg_cells': {
       const v = rows.flatMap(r => e.cols.map(c => num(r[c]))).filter(x => x != null);
       return !v.length ? null : (sum(v) / v.length) * (e.scale ?? 1);

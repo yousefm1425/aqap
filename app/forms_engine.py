@@ -224,7 +224,8 @@ def eval_row(expr: dict, row: dict) -> Any:
         d = sum(x for x in dens if x is not None)
         return None if not d else sum(x for x in nums if x is not None) / d
     if op == "mul":
-        vals = [_num(row.get(x)) for x in expr["of"]]
+        m = expr.get("map")
+        vals = [_num(m.get(row.get(x)) if m else row.get(x)) for x in expr["of"]]
         if any(v is None for v in vals):
             return None
         out = 1.0
@@ -267,6 +268,11 @@ def _match(row: dict, cond: dict) -> bool:
 
 def eval_summary(expr: dict, rows: list[dict], tables: dict | None = None) -> Any:
     op = expr["op"]
+    if op == "count_filled_any":
+        return sum(1 for r in rows if any(not _empty(r.get(c)) for c in expr["cols"]))
+    if op == "ratio_filled":
+        den = [r for r in rows if any(not _empty(r.get(c)) for c in expr["den"])]
+        return None if not den else sum(1 for r in den if not _empty(r.get(expr["num"]))) / len(den)
     if op == "avg_cells":
         vals = [n for n in (_num(r.get(c)) for r in rows for c in expr["cols"]) if n is not None]
         return None if not vals else sum(vals) / len(vals) * expr.get("scale", 1)

@@ -72,7 +72,7 @@ def test_executive_plan_lifecycle(client):
                                                      "2-1-1", "2-1-3", "2-2-1", "2-2-2", "2-2-4", "2-2-5", "2-2-6", "2-2-7",
                                                      "2-2-9", "2-2-10", "3-1-2", "3-2-2", "3-2-5", "3-3-2", "4-1-2", "4-1-3",
                                                      "4-2-1", "4-2-2", "4-3-1", "5-1-1", "5-1-2", "5-1-3", "5-2-1",
-                                                     "6-2-1", "6-3-1", "6-4-1"]
+                                                     "6-1-1", "6-2-1", "6-3-1", "6-4-1"]
     t132 = next(t for t in tpls if t["requirement_code"] == "1-3-2")
     assert t132["sub_standard_code"] == "1-3" and t132["kind"] == "plan" and t132["records"] == []
 
@@ -238,8 +238,12 @@ SAMPLES = {
         {"building": "13404", "element": "فاعلية الإضاءة", "corridors": 2, "stores": 2, "halls": 2},
         {"building": "13404", "element": "فاعلية التهوية", "corridors": 2, "stores": 1, "halls": 1},
         {"building": "13405", "element": "سلامة الأسقف", "corridors": 0, "stores": 1, "halls": 0}]}),
-    "6-3-1": ({"risks": [{"id": "r1", "risk": "انقطاع الكهرباء", "impact": 4, "likelihood": 3},
-                         {"id": "r2", "risk": "تعطل الشبكة", "impact": 2, "likelihood": 2}]}, {}),
+    "6-3-1": ({"risks": [{"id": "r1", "risk": "أعطال التكييف", "impact": "متوسطة", "likelihood": "متكررة"},
+                         {"id": "r2", "risk": "انقطاع المياه", "impact": "منخفضة", "likelihood": "محتملة"},
+                         {"id": "r3", "risk": "أمطار غزيرة", "impact": "عالية", "likelihood": "متكررة"}]}, {}),
+    "6-1-1": ({"accreditation": [{"id": "a01", "recommendation": "زيادة الشراكات"}, {"id": "a07", "proposal": "تطوير المهارات"}],
+               "quality_system": [{"id": "s1", "total": 20, "met": 17, "na": 2, "baseline": 0.8}]},
+              {"accreditation": {"a01": {"action": "عقد شراكات جديدة"}}}),
     "6-4-1": ({"kpis": [{"id": "k01", "target": 0.9, "period": "فصلي"}, {"id": "k45", "target": 0.8, "period": "سنوي"}]},
               {"kpis": {"k01": {"achieved": 0.72}, "k45": {"achieved": 0.8}}}),
 }
@@ -259,8 +263,12 @@ def test_standard5_6_formulas():
     assert round(b["13404"]["efficiency"], 4) == 0.8333 and b["13404"]["rating"] == "متوسط" and b["13405"]["rating"] == "ضعيف"
     assert round(r["summaries"]["elements"]["efficiency"], 4) == round(11 / 18, 4)
     r = run("6-3-1")
-    assert [(x["score"], x["level"]) for x in r["tables"]["risks"]] == [(12, "مرتفع"), (4, "منخفض")]
+    assert [(x["score"], x["level"]) for x in r["tables"]["risks"]] == [(6, "متوسطة"), (2, "منخفضة"), (9, "عالية")]
     assert r["summaries"]["risks"]["high"] == 1
+    r = run("6-1-1")
+    assert len(r["tables"]["accreditation"]) == 37 and r["summaries"]["accreditation"] == {"recs": 2, "handled": 0.5}
+    q = r["tables"]["quality_system"][0]
+    assert q["applicable"] == 18 and round(q["met_pct"], 4) == 0.9444 and round(q["vs_baseline"], 4) == 0.1444
     r = run("6-4-1")
     rows = r["tables"]["kpis"]
     assert len(rows) == 45 and rows[0]["standard"] == "القيادة الإدارية" and rows[-1]["standard"] == "الاستدامة"
