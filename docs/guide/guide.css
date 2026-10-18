@@ -1,0 +1,157 @@
+/* هوية المؤسسة العامة للتدريب التقني والمهني: ألوان الشعار */
+@font-face { font-family: "Plex"; src: url(fonts/ibm-plex-sans-arabic-arabic-400.ttf); font-weight: 400; }
+@font-face { font-family: "Plex"; src: url(fonts/ibm-plex-sans-arabic-arabic-500.ttf); font-weight: 500; }
+@font-face { font-family: "Plex"; src: url(fonts/ibm-plex-sans-arabic-arabic-700.ttf); font-weight: 700; }
+@font-face { font-family: "PlexL"; src: url(fonts/ibm-plex-sans-arabic-latin-400.ttf); font-weight: 400; }
+@font-face { font-family: "PlexL"; src: url(fonts/ibm-plex-sans-arabic-latin-500.ttf); font-weight: 500; }
+@font-face { font-family: "PlexL"; src: url(fonts/ibm-plex-sans-arabic-latin-700.ttf); font-weight: 700; }
+@font-face { font-family: "Taj"; src: url(fonts/tajawal-arabic-500.ttf); font-weight: 500; }
+@font-face { font-family: "Taj"; src: url(fonts/tajawal-arabic-700.ttf); font-weight: 700; }
+@font-face { font-family: "TajL"; src: url(fonts/tajawal-latin-500.ttf); font-weight: 500; }
+@font-face { font-family: "TajL"; src: url(fonts/tajawal-latin-700.ttf); font-weight: 700; }
+
+:root {
+  --teal: #25AFA5; --teal-dk: #126C66; --blue: #3B7D98; --cyan: #00B1C2; --green: #A3D09D; --ink: #404040;
+  --paper: #F4F9F8; --line: #D6E6E3;
+}
+
+@page {
+  size: A4; margin: 24mm 18mm 20mm 18mm;
+  @top-right { content: element(runhead); }
+  @bottom-left { content: counter(page); font: 700 9pt "Taj", "TajL"; color: #126C66; }
+  @bottom-right { content: "منصة الجودة والاعتماد · دليل الاستخدام"; font: 500 8pt "Taj", "TajL"; color: #7A8A88; }
+}
+@page cover { margin: 0; @top-right { content: none; } @bottom-left { content: none; } @bottom-right { content: none; } }
+@page chapter { @top-right { content: none; } }
+
+html { direction: rtl; }
+body { font-family: "Plex", "PlexL"; font-size: 10.5pt; line-height: 1.85; color: var(--ink); margin: 0; }
+h1, h2, h3, h4, .num, .kicker { font-family: "Taj", "TajL"; }
+b, strong { font-weight: 700; color: #2E3B3A; }
+p { margin: 0 0 .6em; text-align: justify; }
+
+.runhead { position: running(runhead); display: flex; align-items: center; justify-content: space-between; width: 174mm;
+  border-bottom: 1.5pt solid var(--teal); padding-bottom: 2mm; font: 500 8.5pt "Taj", "TajL"; color: var(--teal-dk); }
+.runhead img { height: 9mm; }
+
+/* ------------------------------------------------------------ الغلاف */
+.cover { page: cover; height: 297mm; position: relative; overflow: hidden; background: #fff; }
+.cover .band { position: absolute; inset: 0 0 auto 0; height: 168mm;
+  background: linear-gradient(150deg, #0E5650 0%, #126C66 38%, #1E8F87 70%, #25AFA5 100%); }
+.cover .band::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2.2mm;
+  background: linear-gradient(90deg, var(--green), var(--cyan), var(--teal)); }
+.cover .shape { position: absolute; border-radius: 50%; opacity: .16; }
+.cover .s1 { width: 120mm; height: 120mm; background: var(--cyan); left: -40mm; top: -30mm; }
+.cover .s2 { width: 70mm; height: 70mm; background: var(--green); right: -18mm; top: 70mm; }
+.cover .s3 { width: 40mm; height: 40mm; background: #fff; left: 40mm; top: 110mm; opacity: .08; }
+.cover .logo-card { position: absolute; top: 20mm; right: 18mm; background: #fff; border-radius: 6mm; padding: 5mm 7mm;
+  box-shadow: 0 6mm 14mm rgba(0,0,0,.18); }
+.cover .logo-card img { height: 17mm; display: block; }
+.cover .college { position: absolute; top: 50mm; right: 20mm; width: 170mm; color: #fff; font: 700 13pt "Taj", "TajL"; opacity: .95; }
+.cover .title { position: absolute; top: 80mm; right: 20mm; width: 170mm; color: #fff; }
+.cover .title .kicker { display: inline-block; background: rgba(255,255,255,.16); border: .4mm solid rgba(255,255,255,.35);
+  border-radius: 20mm; padding: 1mm 5mm; font-size: 10pt; font-weight: 500; }
+.cover .title h1 { font-size: 36pt; line-height: 1.25; margin: 5mm 0 2mm; }
+.cover .title p { color: #E6F6F4; font-size: 13pt; text-align: right; }
+.cover .meta { position: absolute; bottom: 30mm; right: 20mm; width: 170mm; display: table; border-spacing: 4mm 0; table-layout: fixed; }
+.cover .meta div { display: table-cell; border-top: 1.2mm solid var(--teal); background: var(--paper); border-radius: 0 0 3mm 3mm; padding: 4mm 5mm; }
+.cover .meta div:nth-child(2) { border-color: var(--blue); } .cover .meta div:nth-child(3) { border-color: var(--green); }
+.cover .meta small { display: block; color: #7A8A88; font-size: 8.5pt; } .cover .meta b { font: 700 11pt "Taj", "TajL"; color: var(--teal-dk); }
+.cover .foot { position: absolute; bottom: 12mm; right: 20mm; width: 170mm; text-align: right;
+  font: 500 9pt "Taj", "TajL"; color: #7A8A88; border-top: .3mm solid var(--line); padding-top: 3mm; }
+.cover .stripe { position: absolute; bottom: 0; left: 0; right: 0; height: 4mm;
+  background: linear-gradient(90deg, var(--teal-dk), var(--teal), var(--cyan), var(--blue), var(--green)); }
+
+/* ------------------------------------------------------------ الفهرس */
+.toc { page-break-after: always; }
+.toc h2 { font-size: 22pt; color: var(--teal-dk); margin: 0 0 6mm; }
+.toc ol { list-style: none; padding: 0; margin: 0; }
+.toc li { border-bottom: .3mm dotted #BFD7D3; padding: 2.2mm 0; }
+.toc li.ch { font: 700 12pt "Taj", "TajL"; color: var(--teal-dk); margin-top: 3mm; border-bottom: .4mm solid var(--line); }
+.toc li.sub { padding-right: 8mm; font-size: 10pt; }
+.toc a { color: inherit; text-decoration: none; }
+.toc a::after { float: left; content: target-counter(attr(href url), page); font: 700 10pt "Taj", "TajL"; color: var(--teal); }
+.toc li a { display: block; }
+
+/* ------------------------------------------------------------ فواصل الفصول */
+.chapter { page: chapter; page-break-before: always; position: relative; margin: -24mm -18mm 8mm; padding: 26mm 18mm 10mm;
+  background: linear-gradient(150deg, #0E5650, #126C66 55%, #25AFA5); color: #fff; }
+.chapter .num { font-size: 54pt; line-height: 1; opacity: .3; position: absolute; left: 18mm; top: 18mm; }
+.chapter .kicker { font-size: 10pt; color: #BDEDE7; }
+.chapter h1 { font-size: 26pt; margin: 1mm 0 2mm; }
+.chapter p { color: #E3F5F2; font-size: 11pt; max-width: 140mm; text-align: right; }
+.chapter img.mini { position: absolute; left: 18mm; bottom: 8mm; height: 8mm; background: #fff; border-radius: 2mm; padding: 1.2mm 2.5mm; }
+
+h2 { font-size: 16pt; color: var(--teal-dk); margin: 8mm 0 3mm; padding-right: 4mm; border-right: 1.6mm solid var(--teal);
+  page-break-after: avoid; }
+h3 { font-size: 12.5pt; color: var(--blue); margin: 5mm 0 2mm; page-break-after: avoid; }
+
+/* لقطات الشاشة */
+figure { margin: 3mm 0 5mm; page-break-inside: avoid; }
+figure .frame { border: .4mm solid var(--line); border-radius: 3mm; overflow: hidden; box-shadow: 0 2mm 5mm rgba(18,108,102,.12); }
+figure .bar { background: #EEF4F3; padding: 1.2mm 3mm; display: flex; gap: 1.2mm; }
+figure .bar i { width: 2.2mm; height: 2.2mm; border-radius: 50%; background: #E06C5D; display: inline-block; }
+figure .bar i:nth-child(2) { background: #E9B949; } figure .bar i:nth-child(3) { background: #58B67B; }
+figure img { width: 100%; display: block; }
+figcaption { font-size: 8.5pt; color: #7A8A88; text-align: center; margin-top: 1.5mm; }
+
+/* بطاقات الخطوات */
+.steps { counter-reset: st; margin: 2mm 0 4mm; }
+.step { display: flex; gap: 4mm; align-items: flex-start; padding: 2.6mm 0; border-bottom: .3mm solid #EAF1F0; page-break-inside: avoid; }
+.step::before { counter-increment: st; content: counter(st); flex: none; width: 8mm; height: 8mm; border-radius: 50%;
+  background: var(--teal); color: #fff; font: 700 10.5pt "Taj", "TajL"; text-align: center; line-height: 8.4mm; }
+.step div { flex: 1; } .step div > b { display: block; color: var(--teal-dk); font-family: "Taj", "TajL"; font-size: 11pt; }
+.step p { margin: 0; }
+
+/* صناديق */
+.box { border-radius: 3mm; padding: 3.5mm 5mm; margin: 3mm 0 4mm; page-break-inside: avoid; font-size: 10pt; }
+.box .h { font: 700 10.5pt "Taj", "TajL"; display: block; margin-bottom: 1mm; }
+.tip { background: #E9F6F4; border-right: 1.4mm solid var(--teal); } .tip .h { color: var(--teal-dk); }
+.note { background: #EEF4F8; border-right: 1.4mm solid var(--blue); } .note .h { color: var(--blue); }
+.warn { background: #FDF5E6; border-right: 1.4mm solid #D9A02B; } .warn .h { color: #9A6A0E; }
+
+/* جداول */
+table { width: 100%; border-collapse: collapse; margin: 3mm 0 5mm; font-size: 9.5pt; page-break-inside: auto; }
+th { background: var(--teal-dk); color: #fff; font: 700 10pt "Taj", "TajL"; padding: 2.2mm 3mm; text-align: right; }
+td { padding: 2.2mm 3mm; border-bottom: .3mm solid var(--line); vertical-align: top; }
+tr:nth-child(even) td { background: #F6FAF9; }
+td.k { font-weight: 700; color: var(--teal-dk); white-space: nowrap; }
+
+/* مسار سير العمل */
+.flow { display: flex; flex-wrap: wrap; align-items: center; gap: 1.5mm; margin: 3mm 0 5mm; page-break-inside: avoid; }
+.flow span { background: #fff; border: .4mm solid var(--teal); color: var(--teal-dk); border-radius: 2mm; padding: 1.6mm 3mm;
+  font: 700 9.5pt "Taj", "TajL"; }
+.flow span.fin { background: var(--teal); color: #fff; }
+.flow em { font-style: normal; color: var(--teal); font-weight: 700; }
+.flow small { display: block; font: 400 7.5pt "Plex", "PlexL"; color: #7A8A88; }
+
+.chips { display: flex; gap: 2mm; flex-wrap: wrap; margin: 2mm 0 3mm; }
+.chips span { border-radius: 10mm; padding: .6mm 3.5mm; font: 700 9pt "Taj", "TajL"; }
+.c-met { background: #E3F4EA; color: #2F8F5B; } .c-par { background: #FDF1D8; color: #9A6A0E; }
+.c-not { background: #FBE6E4; color: #C2463D; } .c-na { background: #EEF2F1; color: #6B7A78; }
+
+.two { display: flex; gap: 6mm; } .two > div { flex: 1; }
+.lead { font-size: 11.5pt; color: #2E3B3A; }
+.kbd { font-family: "PlexL", "Plex"; background: #F1F4F4; border: .3mm solid #D4DCDB; border-radius: 1mm; padding: 0 1.5mm; font-size: 9pt; }
+.end { text-align: center; margin-top: 14mm; color: var(--teal-dk); font: 700 12pt "Taj", "TajL"; }
+.end img { height: 14mm; display: block; margin: 0 auto 4mm; }
+
+.cover .inside { position: absolute; top: 182mm; right: 20mm; width: 170mm; }
+.cover .inside h4 { margin: 0 0 4mm; font-size: 12pt; color: var(--teal-dk); }
+.cover .tiles { display: table; width: 100%; border-spacing: 3mm 0; table-layout: fixed; }
+.cover .tiles div { display: table-cell; background: #fff; border: .35mm solid var(--line); border-radius: 3mm; padding: 4mm 3mm; text-align: center; }
+.cover .tiles i { display: block; width: 10mm; height: 10mm; margin: 0 auto 2mm; border-radius: 3mm; font-style: normal;
+  font: 700 12pt "Taj", "TajL"; color: #fff; line-height: 10.4mm; }
+.cover .tiles b { font: 700 9.5pt "Taj", "TajL"; color: var(--ink); }
+.cover .tiles small { display: block; font-size: 7.5pt; color: #7A8A88; line-height: 1.5; margin-top: 1mm; }
+figure.narrow { width: 70%; margin-right: auto; margin-left: auto; }
+.cover .foot span + span { float: left; }
+
+.toct { margin: 0; font-size: 10.5pt; }
+.toct td { background: none !important; border-bottom: .3mm dotted #BFD7D3; padding: 2.2mm 0; }
+.toct tr.ch td { font: 700 12pt "Taj", "TajL"; color: var(--teal-dk); padding-top: 4mm; border-bottom: .4mm solid var(--line); }
+.toct tr.sub td:first-child { padding-right: 8mm; }
+.toct td.pg { width: 14mm; text-align: left; }
+.toct td.pg a { text-decoration: none; color: var(--teal); }
+.toct td.pg a::after { content: target-counter(attr(href url), page); font: 700 10.5pt "Taj", "TajL"; }
+.cover .foot { text-align: center; }

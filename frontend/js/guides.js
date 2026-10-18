@@ -3,7 +3,9 @@ import { api } from './api.js';
 import { go } from './app.js';
 import { date, h, num, toast } from './ui.js';
 
-const BUILTIN = [{ id: 'tvtc-l2', title_ar: 'نظام جودة التدريب في المنشآت التدريبية — المستوى الثاني', category: 'الأدلة الرسمية',
+const BUILTIN = [{ id: 'aqap-guide', title_ar: 'دليل استخدام منصة الجودة والاعتماد', category: 'أدلة المنصة',
+  description_ar: 'الدليل الشامل لمنسق القسم ورئيس القسم ووكيل الجودة: التقديرات والشواهد، النماذج، أعمال الجودة، خطط التحسين، التقارير والتصدير.',
+  url: 'docs/aqap-user-guide.pdf', builtin: true }, { id: 'tvtc-l2', title_ar: 'نظام جودة التدريب في المنشآت التدريبية — المستوى الثاني', category: 'الأدلة الرسمية',
   description_ar: 'الإدارة العامة لجودة التدريب · المؤسسة العامة للتدريب التقني والمهني · سبتمبر 2024',
   url: 'docs/tvtc-training-quality-system-level2-2024.pdf', builtin: true }];
 const CATS = ['الأدلة الرسمية', 'دليل إجرائي', 'دليل استخدام المنصة', 'نماذج', 'لوائح وتعليمات'];

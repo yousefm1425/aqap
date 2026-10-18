@@ -186,7 +186,7 @@ export async function renderReport() {
       : h('p', { class: 'muted' }, 'لا توجد تقديرات بعد'));
   const summary = h('section', { class: 'summary3' },
     rankList(best, 'good', 'مجال القوة (أفضل خمسة معايير فرعية)'),
-    h('div', { class: 'overall' }, ring(overall, 180), h('span', null, `العام التدريبي ${cycle.academic_year}`),
+    h('div', { class: 'overall anim-item' }, ring(overall, 180), h('span', null, `العام التدريبي ${cycle.academic_year}`),
       h('span', { class: 'muted' }, overall == null ? '' : overall >= PASS ? 'مجتاز' : 'دون حد الاجتياز (89.5%)')),
     rankList(worst, 'bad', 'مجال التحسين (أضعف خمسة معايير فرعية)'));
 
@@ -214,6 +214,6 @@ export async function renderReport() {
     title('٣', 'مجالات القوة والتحسين'), summary,
     title('٤', 'أعداد المتطلبات حسب نتيجة التقييم'), tables,
     title('٥', 'المتطلبات التي تتطلب خطة تحسينية'), plansSec);
-  animateEvery(page, [[gauges, 120], [rings, 45]]);
+  animateEvery(page, [[gauges, 120], [rings, 45], [summary, 0]]);
   return page;
 }

@@ -592,3 +592,10 @@ dialog:has(.qw-form) { width: min(40rem, 94vw); }
   .topbar { grid-template-columns: 1fr auto; }
   .topbar nav { grid-column: 1 / -1; grid-row: 2; }
 }
+
+/* إبراز عناصر القائمة: توهج خفيف عند المرور، وبروز للعنصر المختار */
+.topbar nav a { position: relative; opacity: .85; transition: background .2s, box-shadow .25s, transform .2s, opacity .2s; }
+.topbar nav a:hover { opacity: 1; background: rgba(255,255,255,.12); box-shadow: 0 0 14px rgba(160, 255, 220, .25); transform: translateY(-1px); }
+.topbar nav a[aria-current="page"] { opacity: 1; font-weight: 700; background: rgba(255,255,255,.2);
+  box-shadow: 0 0 0 1px rgba(255,255,255,.28), 0 0 18px rgba(120, 240, 200, .45), inset 0 -2px 0 #F2C94C; }
+.topbar nav a:active { transform: scale(.97); }
