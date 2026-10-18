@@ -302,3 +302,41 @@ def test_users_and_guides_admin(client, auth):
     lst = client.get(f"{API}/guides", headers=auth(COORD)).json()
     assert lst["can_edit"] is False and lst["guides"][0]["title_ar"] == "دليل رئيس القسم"
     assert client.delete(f"{API}/guides/{g.json()['id']}", headers=auth(DEAN)).status_code == 200
+
+
+def test_quality_works(client, auth):
+    """أعمال الجودة: جدول مهام أسبوعي مرتبط بالمتطلبات؛ تسليم القسم ينعكس شاهداً على تقديراته دون تكرار."""
+    base = f"{API}/cycles/1/quality-tasks"
+    assert client.post(f"{base}/seed", headers=auth(COORD), json={"semester_start": "2026-08-30"}).status_code == 403
+    r = client.post(f"{base}/seed", headers=auth(DEAN), json={"semester_start": "2026-08-31"})   # الاثنين → يُحسب من الأحد
+    assert r.status_code == 201 and r.json()["created"] == 26
+    assert client.post(f"{base}/seed", headers=auth(DEAN), json={"semester_start": "2026-08-30"}).status_code == 403
+    tasks = client.get(base, headers=auth(DEAN)).json()["tasks"]
+    first = tasks[0]
+    assert first["week_no"] == 3 and first["due_on"] == "2026-09-17" and "الثالث" in first["due_hint_ar"]
+
+    t = client.post(base, headers=auth(DEAN), json={"week_no": 5, "title_ar": "تقرير تجريبي للربط"}).json()["id"]
+    assert client.put(f"{API}/quality-tasks/{t}/links", headers=auth(DEAN), json={"requirement_codes": ["ZZ9"]}).status_code == 404
+    assert client.put(f"{API}/quality-tasks/{t}/links", headers=auth(COORD), json={"requirement_codes": ["R3"]}).status_code == 403
+    assert client.put(f"{API}/quality-tasks/{t}/links", headers=auth(DEAN),
+                      json={"sub_standard_codes": ["S1.1"], "requirement_codes": ["R3"]}).status_code == 200
+
+    sub = {"department_id": 1, "url": "https://tvtc-my.sharepoint.com/personal/q/Documents/exam.pdf", "note_ar": "تقرير الأسبوع"}
+    assert client.post(f"{API}/quality-tasks/{t}/submit", headers=auth(COORD_EE), json=sub).status_code == 403
+    out = client.post(f"{API}/quality-tasks/{t}/submit", headers=auth(COORD), json=sub).json()
+    r3 = [x for x in client.get(f"{API}/cycles/1/assessments", headers=auth(COORD)).json() if x["requirement_code"] == "R3"]
+    assert out["status"] == "submitted" and out["linked"] + out["skipped"] == len(r3)
+    if out["linked"]:
+        assert r3[0]["evidence_count"] >= 1                 # انعكس الشاهد على تقدير المتطلب
+    mine = next(x for x in client.get(base, headers=auth(COORD)).json()["tasks"] if x["id"] == t)
+    assert mine["submissions"]["1"]["status"] == "submitted" and {l["code"] for l in mine["links"]} == {"S1.1", "R3"}
+    assert client.post(f"{API}/quality-tasks/{t}/review", headers=auth(DEAN),
+                       json={"department_id": 1, "decision": "returned"}).status_code == 403   # الإعادة تتطلب سبباً
+    assert client.post(f"{API}/quality-tasks/{t}/review", headers=auth(DEAN),
+                       json={"department_id": 1, "decision": "approved"}).json()["status"] == "approved"
+    na = client.post(f"{API}/quality-tasks/{first['id']}/submit", headers=auth(COORD), json={"department_id": 1, "not_applicable": True})
+    assert na.status_code == 403
+    assert client.post(f"{API}/quality-tasks/{first['id']}/submit", headers=auth(COORD),
+                       json={"department_id": 1, "not_applicable": True, "note_ar": "القسم لا يطبق التدريب عن بعد"}).json()["status"] == "na"
+    assert len(client.get(f"{base}/catalog", headers=auth(COORD)).json()) >= 1
+    assert client.delete(f"{API}/quality-tasks/{t}", headers=auth(COORD)).status_code == 403
