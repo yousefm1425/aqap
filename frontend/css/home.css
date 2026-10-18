@@ -33,7 +33,7 @@ p { margin: 0; }
 .logo { width: 44px; height: 44px; border-radius: 13px; display: grid; place-items: center; color: #fff;
   background: linear-gradient(135deg, var(--teal), var(--sea2)); box-shadow: 0 8px 20px -8px rgba(20,184,166,.8); }
 .logo svg { width: 26px; height: 26px; }
-.nav nav { display: flex; gap: .3rem; }
+.nav nav { display: flex; gap: .3rem; position: absolute; left: 50%; transform: translateX(-50%); }   /* القوائم في وسط الصفحة */
 .nav nav a { padding: .45rem .8rem; border-radius: 10px; font-weight: 600; font-size: .92rem; opacity: .9; transition: background .2s; }
 .nav nav a:hover { background: rgba(255,255,255,.14); }
 .nav.scrolled nav a:hover { background: #EAF4F5; }

@@ -581,3 +581,14 @@ dialog:has(.qw-form) { width: min(40rem, 94vw); }
 .qw-patt.off { background: #F6F4EE; border: 1px solid #E6DFC8; } .qw-patt.on { background: #E8F4EF; border: 1px solid #BFDCD0; }
 .qw-task.is-off { opacity: .6; border-inline-start-color: #C9D3D0; }
 .cr-visit { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: .5rem; margin: .4rem 0 1rem; padding: .7rem; background: #F3F8F6; border-radius: 10px; }
+
+/* شريط المنصة: الشعار يميناً، القوائم في الوسط على صفين، الدورة والمستخدم يساراً */
+.topbar { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: .6rem 1.25rem; }
+.topbar .brand { margin-inline-end: 0; }
+.topbar nav { display: flex; flex-direction: column; align-items: center; gap: .3rem; min-width: 0; }
+.topbar .nav-row { display: flex; flex-wrap: wrap; justify-content: center; gap: .2rem; }
+.topbar .top-side { display: flex; flex-direction: column; align-items: flex-end; gap: .4rem; }
+@media (max-width: 1200px) {
+  .topbar { grid-template-columns: 1fr auto; }
+  .topbar nav { grid-column: 1 / -1; grid-row: 2; }
+}

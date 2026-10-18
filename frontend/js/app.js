@@ -72,6 +72,7 @@ function renderLogin(message) {
 
 function shell(content) {
   const { path } = parseRoute();
+  const link = (p, label) => h('a', { href: `#/${p}`, 'aria-current': path === p ? 'page' : null }, label);
   const cycleSelect = h('select', { 'aria-label': 'دورة التقييم', onchange: e => {
     state.cycle = state.cycles.find(c => c.id === Number(e.target.value));
     route();
@@ -83,23 +84,18 @@ function shell(content) {
     h('header', { class: 'topbar' },
       h('a', { class: 'brand', href: 'home.html', title: 'الصفحة الرئيسية' }, h('strong', null, 'منصة الجودة والاعتماد'), h('span', null, state.me.institution_name ?? '')),
       h('nav', { 'aria-label': 'الأقسام الرئيسية' },
-        h('a', { href: '#/workspace', 'aria-current': path === 'workspace' ? 'page' : null }, 'التقديرات والشواهد'),
-        h('a', { href: '#/minutes', 'aria-current': path === 'minutes' ? 'page' : null }, 'المحاضر'),
-        h('a', { href: '#/forms', 'aria-current': path === 'forms' ? 'page' : null }, 'الخطط والتقارير'),
-        h('a', { href: '#/plans', 'aria-current': path === 'plans' ? 'page' : null }, 'خطط التحسين'),
-        h('a', { href: '#/quality', 'aria-current': path === 'quality' ? 'page' : null }, 'أعمال الجودة'),
-        canDash() && h('a', { href: '#/college', 'aria-current': path === 'college' ? 'page' : null }, 'تقارير الكلية'),
-        h('a', { href: '#/calendar', 'aria-current': path === 'calendar' ? 'page' : null }, 'التقويم'),
-        h('a', { href: '#/report', 'aria-current': path === 'report' ? 'page' : null }, 'التقرير النهائي'),
-        h('a', { href: '#/folders', 'aria-current': path === 'folders' ? 'page' : null }, 'مجلدات الشواهد'),
-        h('a', { href: '#/scope', 'aria-current': path === 'scope' ? 'page' : null }, 'نطاق المتطلبات'),
-        h('a', { href: '#/guides', 'aria-current': path === 'guides' ? 'page' : null }, 'الأدلة'),
-        canAdmin() && h('a', { href: '#/users', 'aria-current': path === 'users' ? 'page' : null }, 'المستخدمون'),
-        canDash() && h('a', { href: '#/dashboard', 'aria-current': path === 'dashboard' ? 'page' : null }, 'لوحة المؤشرات')),
-      state.cycles.length > 0 && cycleSelect,
-      h('div', { class: 'user' },
-        h('span', { title: roles }, state.me.full_name_ar),
-        h('button', { onclick: () => { setToken(null); renderLogin(); } }, 'خروج'))),
+        // الصف الأول: العمل اليومي للأقسام — الصف الثاني: المتابعة والتقارير والإدارة
+        h('div', { class: 'nav-row' },
+          link('workspace', 'التقديرات والشواهد'), link('minutes', 'المحاضر'), link('forms', 'الخطط والتقارير'),
+          link('plans', 'خطط التحسين'), link('quality', 'أعمال الجودة'), link('calendar', 'التقويم'), link('folders', 'مجلدات الشواهد')),
+        h('div', { class: 'nav-row' },
+          canDash() && link('dashboard', 'لوحة المؤشرات'), link('report', 'التقرير النهائي'), canDash() && link('college', 'تقارير الكلية'),
+          link('scope', 'نطاق المتطلبات'), link('guides', 'الأدلة'), canAdmin() && link('users', 'المستخدمون'))),
+      h('div', { class: 'top-side' },
+        state.cycles.length > 0 && cycleSelect,
+        h('div', { class: 'user' },
+          h('span', { title: roles }, state.me.full_name_ar),
+          h('button', { onclick: () => { setToken(null); renderLogin(); } }, 'خروج')))),
     h('main', null, content),
   ];
 }
