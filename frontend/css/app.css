@@ -562,3 +562,18 @@ dialog:has(.qw-form) { width: min(40rem, 94vw); }
 .qw-w { color: #0F5C4A; font-weight: 700; font-size: .75rem; white-space: nowrap; }
 @media (max-width: 640px) { .qw-week { grid-template-columns: 1fr; } .qw-wk { position: static; flex-direction: row; gap: .5rem; justify-content: center; } .qw-task { flex-wrap: wrap; } .qw-tools { flex-direction: row; } }
 .qw-form-link { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; background: #F3F8F6; border: 1px dashed #BFD9CF; border-radius: 9px; padding: .35rem .6rem; font-size: .8rem; }
+
+/* تقارير الكلية */
+.cr-layout { display: grid; grid-template-columns: 270px 1fr; gap: 1rem; margin-top: 1rem; align-items: start; }
+.cr-side { padding: .6rem; position: sticky; top: .5rem; }
+.cr-side h4 { margin: .7rem .4rem .3rem; font-size: .8rem; color: #0F5C4A; }
+.cr-side a { display: block; padding: .45rem .6rem; border-radius: 8px; font-size: .84rem; color: var(--ink); text-decoration: none; line-height: 1.5; }
+.cr-side a:hover { background: #F3F8F6; } .cr-side a.on { background: #E3F1EC; color: #0F5C4A; font-weight: 700; }
+.cr-head { display: flex; justify-content: space-between; gap: 1rem; align-items: flex-start; flex-wrap: wrap; }
+.cr-head h2 { margin: 0 0 .25rem; font-size: 1.1rem; } .cr-head p { margin: 0; font-size: .82rem; }
+.cr-depts { display: flex; gap: .4rem; flex-wrap: wrap; margin: .8rem 0; }
+.cr-dept { border-radius: 999px; padding: .15rem .7rem; font-size: .76rem; font-weight: 600; }
+.cr-dept.ok { background: #E3F4EA; color: var(--met); } .cr-dept.no { background: #FDF1D8; color: #9A6A0E; }
+.cr-table th { font-size: .74rem; line-height: 1.5; vertical-align: bottom; } .cr-table td { font-size: .82rem; vertical-align: top; }
+.cr-total td { font-weight: 700; background: #E8F3EF; }
+@media (max-width: 900px) { .cr-layout { grid-template-columns: 1fr; } .cr-side { position: static; } }

@@ -1,0 +1,55 @@
+// تقارير الكلية: تُجمع تلقائياً من نماذج الأقسام بأعمدة ملفات الإدارة، ويصدّرها وكيل الجودة Excel
+import { api, apiDownload } from './api.js';
+import { go, parseRoute, state } from './app.js';
+import { h, mount, num, toast } from './ui.js';
+
+const FORM_ST = { draft: 'مسودة', submitted: 'مرفوع', returned: 'مُعاد', approved: 'معتمد' };
+const cell = (v, type) => {
+  if (v == null || v === '') return '—';
+  if (type === 'pct') return `${num(Math.round(Number(v) * 1000) / 10)}%`;
+  if (type === 'num') return num(Number(v));
+  if (typeof v === 'string' && /^https?:\/\//.test(v)) return h('a', { href: v, target: '_blank', rel: 'noopener' }, 'رابط ↗');
+  return String(v);
+};
+
+export async function renderCollege() {
+  const cycle = state.cycle;
+  const { params } = parseRoute();
+  const list = await api(`/cycles/${cycle.id}/college-reports`);
+  const key = list.some(r => r.key === params.r) ? params.r : list[0].key;
+  const q = params.f ? `?f=${encodeURIComponent(params.f)}` : '';
+  const data = await api(`/cycles/${cycle.id}/college-reports/${key}${q}`);
+
+  const groups = new Map();
+  for (const r of list) { if (!groups.has(r.group)) groups.set(r.group, []); groups.get(r.group).push(r); }
+  const side = h('aside', { class: 'card cr-side' }, [...groups].map(([g, xs]) => h('div', null, h('h4', null, g),
+    xs.map(r => h('a', { class: r.key === key ? 'on' : '', href: `#/college?r=${r.key}` }, r.title)))));
+
+  const rep = list.find(r => r.key === key);
+  const filled = data.departments.filter(d => d.rows).length;
+  const head = h('div', { class: 'cr-head' },
+    h('div', null, h('h2', null, data.title),
+      h('p', { class: 'muted' }, 'يُجمع تلقائياً من نموذج الأقسام: ', h('b', null, data.source_title),
+        ` · ${num(filled)} من ${num(data.departments.length)} قسم أدخل بياناته`)),
+    h('div', { class: 'row' },
+      rep.filter && h('label', null, `${rep.filter.label} `, h('select', { onchange: e => go('college', { r: key, f: e.target.value }) },
+        rep.filter.options.map(o => h('option', { value: o, selected: o === data.filter }, o)))),
+      h('button', { class: 'btn primary', onclick: () => apiDownload(`/cycles/${cycle.id}/college-reports/${key}/xlsx${data.filter ? `?f=${encodeURIComponent(data.filter)}` : ''}`,
+        `${data.title}.xlsx`).catch(ex => toast(ex.message, 'error')) }, 'تصدير Excel')));
+
+  const depts = h('div', { class: 'cr-depts' }, data.departments.map(d => h('span', { class: `cr-dept ${d.rows ? 'ok' : 'no'}` },
+    d.name, ' · ', d.rows ? `${num(d.rows)} صف` : d.form_id ? `النموذج ${FORM_ST[d.status] ?? ''} بلا بيانات لهذا الاختيار` : 'لم يُنشئ النموذج')));
+
+  const table = data.rows.length ? h('div', { class: 'matrix-wrap' }, h('table', { class: 'data cr-table' },
+    h('thead', null, h('tr', null, h('th', null, '#'), data.columns.map(c => h('th', null, c.label)))),
+    h('tbody', null, data.rows.map((r, i) => h('tr', null, h('td', null, num(i + 1)), data.columns.map(c => h('td', null, cell(r[c.key], c.type))))),
+      data.total && h('tr', { class: 'cr-total' }, h('td', null, ''), data.columns.map(c => h('td', null, c.key === 'dept' ? data.total.dept : cell(data.total[c.key], c.type)))))))
+    : h('div', { class: 'empty' }, h('h3', null, 'لا توجد بيانات بعد'), h('p', null, 'يظهر التقرير عندما تعبّئ الأقسام النموذج المرتبط به في «الخطط والتقارير».'));
+
+  const root = h('div', { class: 'cal-page' },
+    h('header', { class: 'scope-hero' }, h('div', null, h('h1', null, 'تقارير الكلية'),
+      h('p', null, 'تقارير الإدارة التي يرفعها وكيل الجودة على مستوى الكلية، تُجمع تلقائياً من نماذج الأقسام دون إعادة إدخال، '
+        + 'وتُصدَّر Excel بنفس أعمدة ملفات الإدارة.'))),
+    h('div', { class: 'cr-layout' }, side, h('section', { class: 'card' }, head, depts, table)));
+  return root;
+}

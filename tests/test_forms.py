@@ -69,8 +69,8 @@ def test_executive_plan_lifecycle(client):
     coord, hod, dean, ee = (h(client, e) for e in ("coord@ynb", "hod@ynb", "dean@ynb", "coord.ee@ynb"))
     tpls = client.get(f"{API}/cycles/1/forms/templates?department_id=1", headers=coord).json()
     assert [t["requirement_code"] for t in tpls] == ["1-1-2", "1-2-2", "1-2-3", "1-3-2", "1-3-3", "1-3-4", "1-4-1", "1-4-2",
-                                                     "2-1-1", "2-1-3", "2-2-1", "2-2-2", "2-2-4", "2-2-5", "2-2-6", "2-2-7",
-                                                     "2-2-9", "2-2-10", "3-1/جاهزية", "3-1/تنفيذ", "3-1-2", "3-2-2", "3-2-5", "3-3-2", "4-1-2", "4-1-3",
+                                                     "2-1-1", "2-1-3", "2-2-1", "2-2-2", "2-2/المخرجات", "2-2-4", "2-2-5", "2-2-6", "2-2-7",
+                                                     "2-2-9", "2-2-10", "3-1/جاهزية", "3-1/تنفيذ", "3-1-2", "3-2-2", "3-2-5", "3-3-2", "4-1-2", "4-1/المهارات", "4-1-3",
                                                      "4-2-1", "4-2-2", "4-3-1", "5-1-1", "5-1-2", "5-1-3", "5-2-1",
                                                      "6-1-1", "6-2-1", "6-3-1", "6-4-1"]
     t132 = next(t for t in tpls if t["requirement_code"] == "1-3-2")
@@ -356,3 +356,21 @@ def test_js_calculator_matches_python():
         return v
     for c, j in zip(cases, js):
         assert norm(j) == norm(c["py"]), c["code"]
+
+
+def test_college_reports_from_department_forms(client):
+    """تقارير الكلية تُجمع من نماذج الأقسام دون إعادة إدخال، وتُصدَّر Excel."""
+    coord, dean = h(client, "coord@ynb"), h(client, "dean@ynb")
+    tpls = {t["requirement_code"]: t for t in client.get(f"{API}/cycles/1/forms/templates", headers=coord).json()}
+    f = client.post(f"{API}/cycles/1/forms", headers=coord, json={"template_id": tpls["3-1/جاهزية"]["id"], "department_id": 1}).json()
+    row = {"semester": "الأول", "exam": "الفصلي الأول", "notify": "نعم", "courses": 12, "aligned": "نعم", "materials": "لا", "halls": "نعم"}
+    r = client.put(f"{API}/forms/{f['id']}", headers=coord, json={"follow_data": {"exams": [row]}})
+    assert r.status_code == 200 and r.json()["computed"]["summaries"]["exams"]["ready_pct"] == 0.75
+    keys = [x["key"] for x in client.get(f"{API}/cycles/1/college-reports", headers=dean).json()]
+    assert len(keys) == 12 and "skills" in keys
+    rep = client.get(f"{API}/cycles/1/college-reports/exam_readiness?f=الفصلي الأول", headers=dean).json()
+    assert len(rep["rows"]) == 1 and rep["rows"][0]["courses"] == 12 and rep["rows"][0]["materials"] == "لا"
+    assert client.get(f"{API}/cycles/1/college-reports/exam_readiness?f=النهائي", headers=dean).json()["rows"] == []
+    x = client.get(f"{API}/cycles/1/college-reports/exam_readiness/xlsx?f=الفصلي الأول", headers=dean)
+    assert x.status_code == 200 and x.content[:2] == b"PK"
+    assert client.get(f"{API}/cycles/1/college-reports/nope", headers=dean).status_code == 404

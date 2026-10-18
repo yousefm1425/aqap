@@ -10,6 +10,7 @@ import { renderReport } from './report.js';
 import { renderScope } from './scope.js';
 import { renderCalendar } from './calendar.js';
 import { renderQuality } from './quality.js';
+import { renderCollege } from './college.js';
 import { renderFolders } from './folders.js';
 import { renderGuides } from './guides.js';
 import { renderUsers } from './users.js';
@@ -87,6 +88,7 @@ function shell(content) {
         h('a', { href: '#/forms', 'aria-current': path === 'forms' ? 'page' : null }, 'الخطط والتقارير'),
         h('a', { href: '#/plans', 'aria-current': path === 'plans' ? 'page' : null }, 'خطط التحسين'),
         h('a', { href: '#/quality', 'aria-current': path === 'quality' ? 'page' : null }, 'أعمال الجودة'),
+        canDash() && h('a', { href: '#/college', 'aria-current': path === 'college' ? 'page' : null }, 'تقارير الكلية'),
         h('a', { href: '#/calendar', 'aria-current': path === 'calendar' ? 'page' : null }, 'التقويم'),
         h('a', { href: '#/report', 'aria-current': path === 'report' ? 'page' : null }, 'التقرير النهائي'),
         h('a', { href: '#/folders', 'aria-current': path === 'folders' ? 'page' : null }, 'مجلدات الشواهد'),
@@ -104,7 +106,7 @@ function shell(content) {
 
 export async function route() {
   let { path } = parseRoute();
-  if (!['workspace', 'dashboard', 'plans', 'minutes', 'forms', 'report', 'scope', 'calendar', 'quality', 'folders', 'guides', 'users'].includes(path)) {
+  if (!['workspace', 'dashboard', 'plans', 'minutes', 'forms', 'report', 'scope', 'calendar', 'quality', 'college', 'folders', 'guides', 'users'].includes(path)) {
     path = canDash() ? 'dashboard' : 'workspace';
     history.replaceState(null, '', `#/${path}`);
   }
@@ -119,7 +121,7 @@ export async function route() {
   }
   try {
     const view = path === 'dashboard' ? await renderDashboard() : path === 'plans' ? await renderPlans()
-      : path === 'minutes' ? await renderMinutes() : path === 'forms' ? await renderForms() : path === 'report' ? await renderReport() : path === 'scope' ? await renderScope() : path === 'calendar' ? await renderCalendar() : path === 'quality' ? await renderQuality() : path === 'folders' ? await renderFolders() : path === 'guides' ? await renderGuides() : path === 'users' ? await renderUsers() : await renderWorkspace();
+      : path === 'minutes' ? await renderMinutes() : path === 'forms' ? await renderForms() : path === 'report' ? await renderReport() : path === 'scope' ? await renderScope() : path === 'calendar' ? await renderCalendar() : path === 'quality' ? await renderQuality() : path === 'college' ? await renderCollege() : path === 'folders' ? await renderFolders() : path === 'guides' ? await renderGuides() : path === 'users' ? await renderUsers() : await renderWorkspace();
     mount(content, view);
     content.className = '';
   } catch (ex) {

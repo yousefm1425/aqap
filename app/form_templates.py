@@ -20,6 +20,15 @@ TRAINER_STATUS = ["غير مفرغ وغير مجاز", "مفرغ", "مفرغ ج�
 YES_NO = ["نعم", "لا"]
 EXAMS = ["الفصلي الأول", "الفصلي الثاني", "النهائي"]
 
+COURSE_FILE_EVAL = ["متحقق", "متحقق جزئي", "غير متحقق"]
+AUDIT = ["قيّم - يعتمد", "قيّم - يراجع", "لم يقيّم"]
+COURSE_FILE_ITEMS = [("trainer_data", "بيانات المدرب"), ("contact", "وسيلة التواصل"), ("course_data", "بيانات المقرر التدريبية"),
+                     ("desc", "وصف المقرر"), ("goal", "الهدف العام"), ("reqs", "متطلبات التدريب في المقرر"),
+                     ("plan", "الخطة التدريبية"), ("refs", "المراجع التدريبية"), ("quality", "تقييم جودة المقرر"),
+                     ("links", "الروابط المهمة")]
+SKILLS_PERIODS = ["التقرير الشهري الأول (الأسابيع 2–5)", "التقرير الشهري الثاني (الأسابيع 6–9)",
+                  "التقرير الشهري الثالث (الأسابيع 10–13)", "التقييم النهائي"]
+
 # مؤشرات الأداء التشغيلية الواردة في خطة المبادرات (مؤشرات المؤسسة، لا تخص قسماً) — اقتراحات قابلة للتعديل
 OPERATIONAL_KPIS = [
     "نسبة المدربين المستفيدين من ورش العمل والزيارات التبادلية (%)", "نسبة المدرب للمتدرب",
@@ -593,6 +602,37 @@ TEMPLATES: list[dict] = [
         ], "improvements_exam": True},
     },
     {
+        "requirement_code": "2-2/المخرجات", "kind": "report", "sort_order": 14,
+        "title_ar": "تقرير متطلبات وتهيئة المتدربين لقياس جودة مخرجات التدريب",
+        "guidance_ar": "يُعبّأ قبل اختبار قياس جودة المخرجات: جاهزية متطلبات الاختبار، وبرامج تهيئة المتدربين وحضورها ورضاهم عنها. "
+                       "نتائج الاختبار نفسها تُدخل في نموذج 2-2-1.",
+        "schema": {"sections": [
+            {"key": "requirements", "type": "table", "title": "متطلبات قياس جودة المخرجات", "phase": "follow", "max_rows": 2,
+             "columns": [col("semester", "الفصل", "select", "follow", options=SEMESTERS, required=True),
+                         col("specialties", "التخصصات", "number", "follow", required=True, group="المستهدف (عدد)"),
+                         col("trainees", "المتدربون", "number", "follow", required=True, group="المستهدف (عدد)"),
+                         col("lab", "المعمل", "select", "follow", options=YES_NO, required=True, group="تهيئة مكان الاختبار"),
+                         col("internet", "الإنترنت", "select", "follow", options=YES_NO, required=True, group="تهيئة مكان الاختبار"),
+                         col("data_sent", "التأكد من حصر وإرسال بيانات المتدربين", "select", "follow", options=YES_NO, required=True),
+                         col("announced", "إعلان موعد الاختبار للمتدربين", "select", "follow", options=YES_NO, required=True),
+                         col("notes", "ملاحظات وتحديات", "longtext", "follow")],
+             "summary": [{"key": "ready_pct", "label": "نسبة اكتمال المتطلبات", "format": "pct",
+                          "expr": {"op": "share_eq", "cols": ["lab", "internet", "data_sent", "announced"], "eq": "نعم", "denominator": "filled"}}]},
+            {"key": "preparation", "type": "table", "title": "تهيئة المتدربين لقياس جودة المخرجات", "phase": "follow", "max_rows": 10,
+             "columns": [col("semester", "الفصل", "select", "follow", options=SEMESTERS, required=True),
+                         col("specialties", "التخصصات", "number", "follow", group="المستهدف (عدد)"),
+                         col("trainees", "المتدربون", "number", "follow", required=True, group="المستهدف (عدد)"),
+                         col("programs", "برامج التهيئة", "number", "follow", required=True, group="تهيئة المتدربين (عدد)"),
+                         col("attended", "الحضور", "number", "follow", required=True, group="تهيئة المتدربين (عدد)"),
+                         comp("attend_pct", "نسبة الحضور", {"op": "ratio", "a": "attended", "b": "trainees"}, group="تهيئة المتدربين (عدد)"),
+                         col("satisfaction", "قياس رضا المتدربين عن برامج التهيئة", "select", "follow", options=YES_NO),
+                         col("owner", "مسؤول تنفيذ برامج التهيئة", "text", "follow", suggest=OWNERS),
+                         col("notes", "ملاحظات وتحديات", "longtext", "follow")],
+             "summary": [{"key": "attend_pct", "label": "نسبة حضور برامج التهيئة", "format": "pct",
+                          "expr": {"op": "ratio_sums", "num": "attended", "den": "trainees"}}]},
+        ], "progress": {"section": "requirements", "summary": "ready_pct"}},
+    },
+    {
         "requirement_code": "2-2-4", "kind": "plan", "sort_order": 15,
         "title_ar": "الخطة التنفيذية للمتابعة والإشراف على المتدربين أثناء التدريب التعاوني أو التدريب الإنتاجي",
         "guidance_ar": "نموذج خطة تنفيذية سنوية لمتابعة متدربي التدريب التعاوني أو الإنتاجي والإشراف عليهم.",
@@ -860,6 +900,30 @@ TEMPLATES: list[dict] = [
         ]},
     },
     {
+        "requirement_code": "4-1/المهارات", "kind": "report", "sort_order": 26,
+        "title_ar": "تقرير تفعيل منصة المهارات العملية",
+        "guidance_ar": "لكل مقرر وشعبة في كل فترة تقرير (شهري أول وثانٍ وثالث، وتقييم نهائي): نسبة تفاعل المدرب والمتدربين مع أداة "
+                       "المهارات العملية (الروبرك).",
+        "schema": {"sections": [
+            {"key": "sections", "type": "table", "title": "تفاعل المدربين والمتدربين مع أداة المهارات العملية (الروبرك)", "phase": "follow",
+             "max_rows": 600,
+             "columns": [col("period", "فترة التقرير", "select", "follow", options=SKILLS_PERIODS, required=True),
+                         col("specialty", "التخصص", "text", "follow", required=True),
+                         col("course", "المقرر التدريبي", "text", "follow", required=True),
+                         col("section", "رقم الشعبة", "text", "follow"),
+                         col("trainer", "اسم المدرب", "text", "follow"),
+                         col("trainer_pct", "نسبة تفاعل المدرب (%)", "number", "follow", required=True),
+                         col("trainee_pct", "نسبة تفاعل المتدربين (%)", "number", "follow", required=True),
+                         col("notes", "ملاحظات", "longtext", "follow")],
+             "summary": [{"key": "trainer_avg", "label": "متوسط تفاعل المدربين (%)", "format": "num", "expr": {"op": "avg", "col": "trainer_pct"}},
+                         {"key": "trainee_avg", "label": "متوسط تفاعل المتدربين (%)", "format": "num", "expr": {"op": "avg", "col": "trainee_pct"}}]},
+            {"key": "by_period", "type": "pivot", "title": "متوسط التفاعل في كل فترة", "source": "sections", "group_by": "period",
+             "group_label": "الفترة",
+             "columns": [{"key": "trainer_avg", "label": "تفاعل المدربين (%)", "format": "num", "expr": {"op": "avg", "col": "trainer_pct"}},
+                         {"key": "trainee_avg", "label": "تفاعل المتدربين (%)", "format": "num", "expr": {"op": "avg", "col": "trainee_pct"}}]},
+        ]},
+    },
+    {
         "requirement_code": "4-1-3", "kind": "report", "sort_order": 26,
         "title_ar": "تقرير متابعة تطبيق المدربين لملف المدرب وتوصيف المقرر التدريبي، والمنصات الإلكترونية",
         "guidance_ar": "لكل مدرب في كل فصل: مقرراته، وتوفر ملف المدرب وتوصيف المقرر، وتفعيل أدوات البلاكبورد، ورصد الحضور والدرجات في رايات. "
@@ -882,6 +946,25 @@ TEMPLATES: list[dict] = [
                           "expr": {"op": "share_eq", "cols": ["lms1", "lms2"], "eq": "مكتمل", "denominator": "filled"}},
                          {"key": "rayat", "label": "نسبة اكتمال الرصد في رايات", "format": "pct",
                           "expr": {"op": "share_eq", "cols": ["att1", "grades1", "att2", "grades2"], "eq": "مكتمل", "denominator": "filled"}}]},
+            {"key": "course_files", "type": "table", "title": "متابعة ملف المقرر (نموذج رئيس القسم)", "phase": "follow", "max_rows": 300,
+             "help": "لكل مدرب ومقرر: تقييم المدرب الذاتي لعناصر ملف المقرر وتوصيفه، ثم التدقيق الداخلي (رئيس القسم 100٪، "
+                     "وكيل الجودة عينة 25٪) والتدقيق الخارجي (مشرف الجودة بالمنطقة عينة 10٪).",
+             "columns": [col("semester", "الفصل", "select", "follow", options=SEMESTERS, required=True, group="بيانات عامة"),
+                         col("trainer", "اسم المدرب", "text", "follow", required=True, group="بيانات عامة"),
+                         col("course", "اسم المقرر", "text", "follow", required=True, group="بيانات عامة"),
+                         col("link", "رابط ملف المقرر وتوصيفه", "url", "follow", group="بيانات عامة")]
+                        + [col(k, lbl, "select", "follow", options=COURSE_FILE_EVAL, group="تقييم ذاتي (المدرب)") for k, lbl in COURSE_FILE_ITEMS]
+                        + [col(k, lbl, "select", "follow", options=AUDIT, group="التدقيق") for k, lbl in (
+                            ("audit_hod", "رئيس القسم (100٪)"), ("audit_dean", "وكيل الجودة (25٪)"), ("audit_region", "مشرف المنطقة (10٪)"))],
+             "summary": [{"key": "self_met", "label": "نسبة العناصر المتحققة (التقييم الذاتي)", "format": "pct",
+                          "expr": {"op": "share_eq", "cols": [k for k, _ in COURSE_FILE_ITEMS], "eq": "متحقق", "denominator": "filled"}},
+                         {"key": "hod_ok", "label": "نسبة المعتمد من رئيس القسم", "format": "pct",
+                          "expr": {"op": "share_eq", "cols": ["audit_hod"], "eq": AUDIT[0]}},
+                         {"key": "n", "label": "عدد الملفات", "format": "num", "expr": {"op": "count"}}]},
+            {"key": "council", "type": "table", "title": "اعتماد توصيف المقررات التدريبية من مجلس القسم", "phase": "follow", "max_rows": 2,
+             "columns": [col("semester", "الفصل", "select", "follow", options=SEMESTERS, required=True),
+                         col("approved", "اعتماد توصيف المقرر التدريبي للمدرب من مجلس القسم", "select", "follow", options=YES_NO, required=True),
+                         col("meeting", "رقم المحضر أو تاريخه", "text", "follow")]},
             {"key": "recommendations", "type": "text", "title": "التوصيات", "phase": "follow"},
         ]},
     },
