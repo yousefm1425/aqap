@@ -10,10 +10,10 @@ router = APIRouter(prefix="/cycles", tags=["دورات التقييم"])
 @router.get("")
 async def list_cycles(user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
     cur = await conn.execute(
-        """SELECT c.* FROM assessment_cycle c
+        """SELECT c.*, f.code AS framework_code FROM assessment_cycle c JOIN framework f ON f.id = c.framework_id
             WHERE c.institution_id = %(inst)s
                OR c.id = ANY(%(cycles)s)
-            ORDER BY c.starts_on DESC""",
+            ORDER BY (f.code = 'TVTC-PATTERNS'), c.starts_on DESC""",
         {"inst": user.institution_id, "cycles": [g.cycle_id for g in user.grants if g.cycle_id]})
     return await cur.fetchall()
 

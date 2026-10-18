@@ -367,7 +367,7 @@ def test_college_reports_from_department_forms(client):
     r = client.put(f"{API}/forms/{f['id']}", headers=coord, json={"follow_data": {"exams": [row]}})
     assert r.status_code == 200 and r.json()["computed"]["summaries"]["exams"]["ready_pct"] == 0.75
     keys = [x["key"] for x in client.get(f"{API}/cycles/1/college-reports", headers=dean).json()]
-    assert len(keys) == 12 and "skills" in keys
+    assert len(keys) == 15 and "skills" in keys
     rep = client.get(f"{API}/cycles/1/college-reports/exam_readiness?f=الفصلي الأول", headers=dean).json()
     assert len(rep["rows"]) == 1 and rep["rows"][0]["courses"] == 12 and rep["rows"][0]["materials"] == "لا"
     assert client.get(f"{API}/cycles/1/college-reports/exam_readiness?f=النهائي", headers=dean).json()["rows"] == []

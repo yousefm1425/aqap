@@ -189,7 +189,15 @@ async def list_tasks(cycle_id: int, user: CurrentUser = Depends(current_user), c
                                          for r in recs if r["template_id"] == tpl["id"]}}
         t["links"] = [x for x in links if x["task_id"] == t["id"]]
         t["submissions"] = {str(s["department_id"]): s for s in subs if s["task_id"] == t["id"]}
-    return {"can_edit": user.has(*MANAGERS), "today": date.today(), "departments": departments, "tasks": tasks}
+    from .patterns import activation
+    patt = await activation(conn, cycle_id)
+    for t in tasks:                      # مهام الأنماط دون قرار اعتماد: لا تنطبق تلقائياً على كل الأقسام
+        t["inactive"] = t.get("depends_on") == "patterns" and patt is None
+        if t["inactive"]:
+            t["submissions"] = {str(d): {"status": "na", "auto": True, "note_ar": "لم يُعتمد تطبيق أنماط التدريب في الكلية"}
+                                for d in ids}
+    return {"can_edit": user.has(*MANAGERS), "today": date.today(), "departments": departments, "tasks": tasks,
+            "patterns_active": patt is not None}
 
 
 @router.get("/cycles/{cycle_id}/quality-tasks/catalog")
@@ -237,6 +245,9 @@ async def seed_tasks(cycle_id: int, body: SeedIn, user: CurrentUser = Depends(cu
                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
             (cycle_id, week, title, start + timedelta(days=(week - 1) * 7 + off), hint_for(week, off), cond, notes, i,
              form, user.id))
+        if cond == PATTERNS_COND:
+            await conn.execute("UPDATE quality_task SET depends_on = 'patterns' WHERE id = (SELECT max(id) FROM quality_task WHERE cycle_id = %s)",
+                               (cycle_id,))
         tid = (await cur.fetchone())["id"]
         await conn.execute(
             """INSERT INTO quality_task_link (task_id, sub_standard_id)
@@ -312,6 +323,10 @@ async def set_links(task_id: int, body: LinksIn, user: CurrentUser = Depends(cur
 async def submit_task(task_id: int, body: SubmitIn, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
     t = await _task(conn, user, task_id)
     dept = body.department_id
+    if t.get("depends_on") == "patterns":
+        from .patterns import activation
+        if await activation(conn, t["cycle_id"]) is None:
+            raise forbid("لم يُعتمد تطبيق أنماط التدريب في الكلية؛ المهمة لا تنطبق")
     if not (user.has(*SUBMITTERS, department_id=dept, cycle_id=t["cycle_id"]) or user.has(*MANAGERS)):
         raise forbid("تسليم أعمال الجودة من صلاحية منسق القسم أو رئيسه")
     cur = await conn.execute("SELECT 1 FROM cycle_department WHERE cycle_id = %s AND department_id = %s", (t["cycle_id"], dept))

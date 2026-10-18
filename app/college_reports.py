@@ -214,8 +214,97 @@ REPORTS: list[dict] = [
 BY_KEY = {r["key"]: r for r in REPORTS}
 
 
+# ------------------------------------------------------------------ تقارير من بيانات المنصة مباشرة (لا من النماذج)
+SELF_AR = {"met": "متحقق", "partial": "متحقق جزئي", "not_met": "غير متحقق", "na": "لا ينطبق"}
+WEEKS = ["الأول", "الثاني", "الثالث", "الرابع", "الخامس", "السادس", "السابع", "الثامن", "التاسع", "العاشر", "الحادي عشر",
+         "الثاني عشر", "الثالث عشر", "الرابع عشر", "الخامس عشر", "السادس عشر", "السابع عشر", "الثامن عشر", "التاسع عشر"]
+
+
+async def _patterns_rows(conn, cycle_id, flt, depts):
+    cur = await conn.execute(
+        """SELECT s.title_ar AS domain, ss.title_ar AS standard, r.code, r.text_ar, a.self_rating, a.ext_verdict,
+                  (SELECT count(*) FROM assessment_evidence ae WHERE ae.assessment_id = a.id) AS ev
+             FROM training_pattern_activation t JOIN assessment a ON a.cycle_id = t.patterns_cycle_id
+             JOIN requirement r ON r.id = a.requirement_id JOIN sub_standard ss ON ss.id = r.sub_standard_id
+             JOIN standard s ON s.id = ss.standard_id
+            WHERE t.cycle_id = %s AND t.revoked_at IS NULL ORDER BY s.sort_order, ss.sort_order, r.sort_order""", (cycle_id,))
+    return [{"dept": "الكلية", "domain": r["domain"], "standard": r["standard"], "requirement": f"{r['code']}  {r['text_ar']}",
+             "level": SELF_AR.get(r["self_rating"]), "evidence": r["ev"]} for r in await cur.fetchall()]
+
+
+async def _l2_rows(conn, cycle_id, flt, depts):
+    """مستوى الجودة لكل معيار فرعي في كل قسم، ومستوى إنجاز إجراءاته التحسينية — يُحسب من التقديرات وخطط التحسين."""
+    cur = await conn.execute(
+        """SELECT d.name_ar AS dept, s.code AS std, s.title_ar AS std_title, ss.code AS sub, ss.title_ar AS sub_title,
+                  array_agg(effective_rating(a.self_rating, a.ext_verdict, na_allowed(a.requirement_id, a.department_id))::text) AS ratings,
+                  (SELECT count(*) FROM improvement_action ia JOIN assessment a2 ON a2.id = ia.assessment_id
+                     JOIN requirement r2 ON r2.id = a2.requirement_id
+                    WHERE a2.cycle_id = %(c)s AND a2.department_id = d.id AND r2.sub_standard_id = ss.id AND ia.status <> 'cancelled') AS plans,
+                  (SELECT count(*) FROM improvement_action ia JOIN assessment a2 ON a2.id = ia.assessment_id
+                     JOIN requirement r2 ON r2.id = a2.requirement_id
+                    WHERE a2.cycle_id = %(c)s AND a2.department_id = d.id AND r2.sub_standard_id = ss.id AND ia.status = 'verified') AS closed
+             FROM assessment a JOIN department d ON d.id = a.department_id
+             JOIN requirement r ON r.id = a.requirement_id JOIN sub_standard ss ON ss.id = r.sub_standard_id
+             JOIN standard s ON s.id = ss.standard_id
+            WHERE a.cycle_id = %(c)s AND a.department_id = ANY(%(d)s) AND NOT is_excluded(a.requirement_id, a.department_id, a.cycle_id)
+            GROUP BY d.id, d.name_ar, d.code, s.code, s.title_ar, s.sort_order, ss.id, ss.code, ss.title_ar, ss.sort_order
+            ORDER BY d.code, s.sort_order, ss.sort_order""", {"c": cycle_id, "d": depts})
+    out = []
+    for r in await cur.fetchall():
+        rs = [x for x in r["ratings"] if x]
+        scored = [x for x in rs if x != "na"]
+        if not rs:
+            level = None
+        elif not scored:
+            level = "لا ينطبق"
+        elif all(x == "met" for x in scored):
+            level = "متحقق"
+        elif all(x == "not_met" for x in scored):
+            level = "غير متحقق"
+        else:
+            level = "متحقق جزئي"
+        out.append({"dept": r["dept"], "std": f"{r['std']} {r['std_title']}", "sub": f"{r['sub']} {r['sub_title']}",
+                    "level": level, "rated": f"{len(rs)} من {len(r['ratings'])}",
+                    "actions": (r["closed"] / r["plans"]) if r["plans"] else None})
+    return out
+
+
+async def _visits(conn, cycle_id, flt, depts):
+    cur = await conn.execute("SELECT * FROM external_visit WHERE cycle_id = %s ORDER BY visit_date, id", (cycle_id,))
+    days = ["الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت", "الأحد"]
+    return [{"dept": "الكلية", "id": v["id"], "date": v["visit_date"].isoformat(), "day": days[v["visit_date"].weekday()],
+             "program": v["program"], "supervisor_name": v["supervisor_name"], "supervisor_phone": v["supervisor_phone"],
+             "college_name": v["college_name"], "college_phone": v["college_phone"],
+             "executed": None if v["executed"] is None else ("نعم" if v["executed"] else "لا"), "notes": v["notes_ar"]}
+            for v in await cur.fetchall()]
+
+
+REPORTS += [
+    {"key": "l2_followup", "group": "نظام جودة التدريب (المستوى الثاني)", "source": None, "filter": ("الأسبوع", WEEKS),
+     "title": "تقرير متابعة تنفيذ تحقيق نظام جودة التدريب في المنشآت التدريبية (المستوى الثاني)",
+     "source_title": "تقديرات الأقسام وخطط التحسين في المنصة",
+     "columns": [C("std", "المعيار الرئيسي"), C("sub", "المعيار الفرعي"), C("level", "مستوى الجودة"),
+                 C("rated", "المتطلبات المقدّرة"), C("actions", "الإجراءات التحسينية (مستوى الإنجاز)", "pct")],
+     "custom": _l2_rows},
+    {"key": "external_visit", "group": "نظام جودة التدريب (المستوى الثاني)", "source": None, "filter": None,
+     "title": "جدول زيارات التقييم الخارجي لنظام جودة التدريب", "source_title": "يُدخله وكيل الجودة",
+     "columns": [C("date", "التاريخ"), C("day", "اليوم"), C("program", "البرنامج التدريبي"),
+                 C("supervisor_name", "مشرف الجودة المكلف بالزيارة"), C("supervisor_phone", "جوال المشرف"),
+                 C("college_name", "مشرف/وكيل الجودة في الكلية"), C("college_phone", "جوال وكيل الجودة"),
+                 C("executed", "تنفيذ الزيارة"), C("notes", "ملاحظات")],
+     "custom": _visits, "editable": True},
+    {"key": "patterns_followup", "group": "أنماط التدريب", "source": None, "filter": ("الأسبوع", ["الثالث", "الخامس", "السابع", "التاسع"]),
+     "title": "تقرير متابعة تنفيذ تحقيق منهجية قياس أنماط التدريب المختلفة", "source_title": "دورة منهجية قياس أنماط التدريب",
+     "columns": [C("domain", "اسم المجال"), C("standard", "اسم المعيار"), C("requirement", "المتطلب"), C("level", "مستوى الجودة"),
+                 C("evidence", "الشواهد المرفقة", "num")],
+     "custom": _patterns_rows, "needs_patterns": True},
+]
+BY_KEY = {r["key"]: r for r in REPORTS}
+
+
 def catalog() -> list[dict]:
-    return [{"key": r["key"], "group": r["group"], "title": r["title"], "source": r["source"],
+    return [{"key": r["key"], "group": r["group"], "title": r["title"], "source": r["source"], "editable": r.get("editable", False),
+             "needs_patterns": r.get("needs_patterns", False),
              "filter": r["filter"] and {"label": r["filter"][0], "options": r["filter"][1]}} for r in REPORTS]
 
 
@@ -223,6 +312,12 @@ async def build_report(conn: AsyncConnection, cycle_id: int, key: str, flt: str 
     rep = BY_KEY[key]
     if rep["filter"] and flt not in rep["filter"][1]:
         flt = rep["filter"][1][0]
+    if rep.get("custom"):
+        rows = await rep["custom"](conn, cycle_id, flt, dept_ids)
+        return {"key": key, "title": rep["title"], "group": rep["group"], "filter": flt,
+                "filter_label": rep["filter"] and rep["filter"][0], "columns": [C("dept", "القسم التدريبي")] + rep["columns"],
+                "rows": rows, "total": None, "departments": [], "source": None, "source_title": rep["source_title"],
+                "editable": rep.get("editable", False)}
     tpl = _tpl(rep["source"])
     cur = await conn.execute(
         """SELECT d.id, d.name_ar, f.id AS form_id, f.status, f.plan_data, f.follow_data

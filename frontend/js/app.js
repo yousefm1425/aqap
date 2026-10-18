@@ -136,7 +136,8 @@ export async function refreshCycles() {
 }
 
 function pickCycle() {
-  return state.cycles.find(c => c.status === 'open' || c.status === 'external_review') ?? state.cycles[0] ?? null;
+  const main = state.cycles.filter(c => c.framework_code !== 'TVTC-PATTERNS');   // دورة الأنماط تُفتح عند الحاجة فقط
+  return main.find(c => c.status === 'open' || c.status === 'external_review') ?? main[0] ?? state.cycles[0] ?? null;
 }
 
 async function boot() {

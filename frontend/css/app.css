@@ -577,3 +577,7 @@ dialog:has(.qw-form) { width: min(40rem, 94vw); }
 .cr-table th { font-size: .74rem; line-height: 1.5; vertical-align: bottom; } .cr-table td { font-size: .82rem; vertical-align: top; }
 .cr-total td { font-weight: 700; background: #E8F3EF; }
 @media (max-width: 900px) { .cr-layout { grid-template-columns: 1fr; } .cr-side { position: static; } }
+.qw-patt { display: flex; justify-content: space-between; align-items: center; gap: .8rem; flex-wrap: wrap; border-radius: 12px; padding: .7rem 1rem; margin-top: 1rem; font-size: .86rem; }
+.qw-patt.off { background: #F6F4EE; border: 1px solid #E6DFC8; } .qw-patt.on { background: #E8F4EF; border: 1px solid #BFDCD0; }
+.qw-task.is-off { opacity: .6; border-inline-start-color: #C9D3D0; }
+.cr-visit { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: .5rem; margin: .4rem 0 1rem; padding: .7rem; background: #F3F8F6; border-radius: 10px; }

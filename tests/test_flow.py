@@ -334,13 +334,45 @@ def test_quality_works(client, auth):
                        json={"department_id": 1, "decision": "returned"}).status_code == 403   # الإعادة تتطلب سبباً
     assert client.post(f"{API}/quality-tasks/{t}/review", headers=auth(DEAN),
                        json={"department_id": 1, "decision": "approved"}).json()["status"] == "approved"
-    na = client.post(f"{API}/quality-tasks/{first['id']}/submit", headers=auth(COORD), json={"department_id": 1, "not_applicable": True})
-    assert na.status_code == 403
-    assert client.post(f"{API}/quality-tasks/{first['id']}/submit", headers=auth(COORD),
-                       json={"department_id": 1, "not_applicable": True, "note_ar": "القسم لا يطبق التدريب عن بعد"}).json()["status"] == "na"
+    assert first["inactive"] and first["submissions"]["1"]["status"] == "na"     # الأنماط غير معتمدة: لا تنطبق تلقائياً
+    r = client.post(f"{API}/quality-tasks/{first['id']}/submit", headers=auth(COORD), json={"department_id": 1, "url": sub["url"]})
+    assert r.status_code == 403 and "أنماط التدريب" in r.json()["detail"]
+    l2 = tasks[1]
+    na = client.post(f"{API}/quality-tasks/{l2['id']}/submit", headers=auth(COORD), json={"department_id": 1, "not_applicable": True})
+    assert na.status_code == 403                                                  # «لا تنطبق» يتطلب سبباً
+    assert client.post(f"{API}/quality-tasks/{l2['id']}/submit", headers=auth(COORD),
+                       json={"department_id": 1, "not_applicable": True, "note_ar": "سبب"}).json()["status"] == "na"
     assert len(client.get(f"{base}/catalog", headers=auth(COORD)).json()) >= 1
     exam = next(x for x in tasks if x["form_code"] == "3-1/جاهزية")
     assert exam["form"] and exam["form"]["records"] == {}                    # المهمة تفتح نموذج الجاهزية
     r = client.post(f"{API}/quality-tasks/{exam['id']}/submit", headers=auth(COORD), json={"department_id": 1, "from_form": True})
     assert r.status_code == 403 and "لم يُعتمد" in r.json()["detail"]      # لا تسليم قبل اعتماد النموذج
     assert client.delete(f"{API}/quality-tasks/{t}", headers=auth(COORD)).status_code == 403
+
+
+def test_training_patterns_optional(client, auth):
+    """أنماط التدريب لا تُفعَّل إلا بقرار صاحب الصلاحية؛ بعده تُنشأ دورة المنهجية (12 متطلباً) ويُتاح تقرير المتابعة."""
+    base = f"{API}/cycles/1/patterns"
+    assert client.get(base, headers=auth(COORD)).json()["active"] is False
+    body = {"authority_ar": "مدير عام التدريب بالمنطقة", "decision_no": "123", "patterns": ["مدمج"],
+            "specialties": [{"specialty": "الشبكات", "courses": 3, "pattern": "مدمج", "trainees": 40}]}
+    assert client.post(f"{base}/activate", headers=auth(COORD), json=body).status_code == 403
+    assert client.post(f"{base}/activate", headers=auth(DEAN), json={**body, "patterns": ["هجين"]}).status_code == 403
+    r = client.post(f"{base}/activate", headers=auth(DEAN), json=body)
+    assert r.status_code == 201
+    pc = r.json()["patterns_cycle_id"]
+    info = client.get(base, headers=auth(DEAN)).json()
+    assert info["active"] and info["progress"]["total"] == 12
+    assert client.post(f"{base}/activate", headers=auth(DEAN), json=body).status_code == 403          # مفعّلة مسبقاً
+    cycles = client.get(f"{API}/cycles", headers=auth(DEAN)).json()
+    assert cycles[-1]["id"] == pc and cycles[-1]["framework_code"] == "TVTC-PATTERNS"               # دورة الأنماط آخر القائمة
+    rep = client.get(f"{API}/cycles/1/college-reports/patterns_followup", headers=auth(DEAN)).json()
+    assert len(rep["rows"]) == 12 and rep["rows"][0]["domain"] == "التخطيط"
+    assert len(client.get(f"{API}/cycles/1/college-reports/l2_followup", headers=auth(DEAN)).json()["rows"]) >= 1
+    v = client.post(f"{API}/cycles/1/external-visits", headers=auth(DEAN), json={"visit_date": "2027-03-10", "program": "دبلوم", "executed": True})
+    assert v.status_code == 201
+    vis = client.get(f"{API}/cycles/1/college-reports/external_visit", headers=auth(DEAN)).json()["rows"]
+    assert vis[0]["day"] == "الأربعاء" and vis[0]["executed"] == "نعم"
+    assert client.delete(f"{API}/external-visits/{v.json()['id']}", headers=auth(COORD)).status_code == 403
+    assert client.post(f"{base}/revoke", headers=auth(DEAN), json={"reason_ar": "إيقاف النمط"}).json()["active"] is False
+    assert client.post(f"{base}/activate", headers=auth(DEAN), json=body).json()["patterns_cycle_id"] == pc   # نفس الدورة بلا فقد

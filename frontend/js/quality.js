@@ -1,7 +1,7 @@
 // أعمال الجودة: جدول مهام متابعة الجودة الأسبوعي، وتوافقها مع المعايير الفرعية والمتطلبات
 // تسليم القسم برابط الشاهد يُربط تلقائياً بتقديرات المتطلبات المرتبطة فلا يتكرر الرفع
 import { api } from './api.js';
-import { deptName, go, parseRoute, state } from './app.js';
+import { deptName, go, parseRoute, refreshCycles, state } from './app.js';
 import { date, h, mount, num, toast } from './ui.js';
 
 const ST = { submitted: 'مُسلَّمة', approved: 'معتمدة', returned: 'مُعادة', na: 'لا تنطبق', pending: 'لم تُسلَّم', overdue: 'متأخرة' };
@@ -143,11 +143,64 @@ function reviewDialog(task, deptId, reload) {
       h('button', { type: 'button', class: 'btn', onclick: () => decide('returned') }, 'إعادة للقسم'))], null);
 }
 
+function patternsDialog(cycle, info, reload) {
+  const auth = h('input', { class: 'input', required: true, placeholder: 'مثال: مدير عام التدريب التقني والمهني بالمنطقة' });
+  const no = h('input', { class: 'input' });
+  const dt = h('input', { class: 'input', type: 'date' });
+  const boxes = info.pattern_options.map(p => h('label', { class: 'qw-na' }, h('input', { type: 'checkbox', value: p }), ` ${p}`));
+  const spec = h('textarea', { class: 'input', rows: 3, placeholder: 'سطر لكل تخصص: التخصص، عدد المقررات، النمط، عدد المتدربين المستفيدين' });
+  const notes = h('input', { class: 'input' });
+  openDialog('تسجيل قرار اعتماد أنماط التدريب', [
+    h('p', { class: 'qw-tip' }, 'تُفعَّل منهجية قياس أنماط التدريب للكلية فقط بعد اعتماد صاحب الصلاحية للنمط. بعد التسجيل تُنشأ دورة '
+      + '«منهجية قياس أنماط التدريب» (12 متطلباً) وتظهر مهام الأنماط في أعمال الجودة.'),
+    field('صاحب الصلاحية المعتمِد', auth), h('div', { class: 'row' }, field('رقم القرار', no), field('تاريخ القرار', dt)),
+    h('div', { class: 'field' }, h('label', null, 'الأنماط المعتمدة'), h('div', { class: 'row' }, boxes)),
+    field('التخصصات والمقررات المطبق عليها النمط (اختياري)', spec), field('ملاحظات', notes)],
+  async () => {
+    const patterns = boxes.map(b => b.querySelector('input')).filter(x => x.checked).map(x => x.value);
+    const specialties = spec.value.split('\n').map(l => l.split(/[،,]/).map(x => x.trim())).filter(x => x[0])
+      .map(([specialty, courses, pattern, trainees]) => ({ specialty, courses: courses ? Number(courses) || null : null,
+        pattern: pattern || null, trainees: trainees ? Number(trainees) || null : null }));
+    await api(`/cycles/${cycle.id}/patterns/activate`, { method: 'POST', body: { authority_ar: auth.value, decision_no: no.value || null,
+      decision_date: dt.value || null, patterns, specialties, notes_ar: notes.value || null } });
+    await refreshCycles();
+    toast('فُعّلت أنماط التدريب وأُنشئت دورة منهجية القياس'); reload();
+  }, 'تفعيل');
+}
+
+function patternsBanner(cycle, info, reload) {
+  const a = info.activation;
+  if (!info.active) {
+    return h('div', { class: 'qw-patt off' },
+      h('div', null, h('b', null, 'أنماط التدريب: غير مفعّلة'),
+        h('span', null, ' — لم يُسجَّل قرار اعتماد نمط تدريب للكلية، فمهام الأنماط «لا تنطبق» تلقائياً على كل الأقسام.')),
+      info.can_edit && h('button', { class: 'btn small', onclick: () => patternsDialog(cycle, info, reload) }, 'تسجيل قرار الاعتماد'));
+  }
+  const p = info.progress;
+  return h('div', { class: 'qw-patt on' },
+    h('div', null, h('b', null, `أنماط التدريب: مفعّلة (${a.patterns.join('، ')})`),
+      h('span', null, ` — بقرار ${a.authority_ar}${a.decision_no ? ` رقم ${a.decision_no}` : ''}${a.decision_date ? ` بتاريخ ${a.decision_date}` : ''}`),
+      p && h('span', { class: 'faint' }, ` · قُدّر ${num(p.rated)} من ${num(p.total)} متطلب`)),
+    h('div', { class: 'row' },
+      h('button', { class: 'btn small primary', onclick: async () => {
+        await refreshCycles();
+        state.cycle = state.cycles.find(c => c.id === a.patterns_cycle_id) ?? state.cycle;
+        go('workspace', { dept: 'inst' });
+      } }, 'فتح دورة منهجية الأنماط'),
+      info.can_edit && h('button', { class: 'btn small', onclick: async () => {
+        const reason = prompt('سبب إيقاف أنماط التدريب (يبقى ما أُنجز محفوظاً):');
+        if (!reason) return;
+        try { await api(`/cycles/${cycle.id}/patterns/revoke`, { method: 'POST', body: { reason_ar: reason } }); toast('أُوقفت أنماط التدريب'); reload(); }
+        catch (ex) { toast(ex.message, 'error'); }
+      } }, 'إيقاف')));
+}
+
 export async function renderQuality() {
   const cycle = state.cycle;
   const { params } = parseRoute();
-  const [data, catalog, templates] = await Promise.all([api(`/cycles/${cycle.id}/quality-tasks`),
-    api(`/cycles/${cycle.id}/quality-tasks/catalog`), api(`/cycles/${cycle.id}/forms/templates`).catch(() => [])]);
+  const [data, catalog, templates, patt] = await Promise.all([api(`/cycles/${cycle.id}/quality-tasks`),
+    api(`/cycles/${cycle.id}/quality-tasks/catalog`), api(`/cycles/${cycle.id}/forms/templates`).catch(() => []),
+    api(`/cycles/${cycle.id}/patterns`)]);
   const { tasks, departments, today, can_edit: canEdit } = data;
   const deptIds = departments.map(d => d.id);
   const dept = deptIds.includes(Number(params.dept)) ? Number(params.dept) : deptIds.length === 1 ? deptIds[0] : null;
@@ -155,7 +208,7 @@ export async function renderQuality() {
   const reload = () => go('quality', { dept: dept ?? '', view, t: Date.now() });
   const shown = dept ? [dept] : deptIds;
 
-  const cells = tasks.flatMap(t => shown.map(d => statusOf(t, d, today)));
+  const cells = tasks.filter(t => !t.inactive).flatMap(t => shown.map(d => statusOf(t, d, today)));
   const cnt = k => cells.filter(x => k.includes(x)).length;
   const doneP = cells.length ? Math.round((cnt(['submitted', 'approved', 'na']) / cells.length) * 100) : 0;
 
@@ -175,6 +228,7 @@ export async function renderQuality() {
         h('span', { class: 'st-soon' }, h('b', null, num(cnt(['submitted']))), ' بانتظار الاعتماد'),
         h('span', { class: 'st-overdue' }, h('b', null, num(cnt(['overdue', 'returned']))), ' متأخرة أو مُعادة'))));
 
+  const banner = patternsBanner(cycle, patt, reload);
   const tabs = h('div', { class: 'qw-tabs', role: 'tablist' },
     [['weeks', 'الجدول الأسبوعي'], ['map', 'التوافق مع المعايير']].map(([k, t]) =>
       h('button', { role: 'tab', class: view === k ? 'on' : '', 'aria-selected': String(view === k), onclick: () => go('quality', { dept: dept ?? '', view: k }) }, t)));
@@ -195,13 +249,13 @@ export async function renderQuality() {
     const canSubmit = single && (state.me.grants.some(g => ['dept_coordinator', 'hod', 'faculty'].includes(g.role)
       && (g.department_id == null || g.department_id === single)) || canEdit);
     const left = t.due_on ? Math.round((new Date(`${t.due_on}T00:00:00`) - new Date(`${today}T00:00:00`)) / 864e5) : null;
-    return h('article', { class: `qw-task ${st ? `s-${st}` : ''}` },
+    return h('article', { class: `qw-task ${t.inactive ? 'is-off' : st ? `s-${st}` : ''}` },
       h('div', { class: 'qw-due' }, t.due_on ? [h('b', null, num(new Date(`${t.due_on}T00:00:00`).getDate())),
         h('span', null, new Date(`${t.due_on}T00:00:00`).toLocaleDateString('ar-SA-u-ca-gregory', { month: 'short' }))] : h('span', null, '—')),
       h('div', { class: 'qw-body' },
         h('h3', null, t.title_ar),
         h('p', { class: 'muted' }, t.due_hint_ar ?? '', t.due_on && ` · ${date(t.due_on)}`,
-          left != null && !(st && ['submitted', 'approved', 'na'].includes(st)) && (left < 0 ? ` · متأخرة ${num(-left)} يوم` : left <= 7 ? ` · باقي ${num(left)} يوم` : '')),
+          left != null && !t.inactive && !(st && ['submitted', 'approved', 'na'].includes(st)) && (left < 0 ? ` · متأخرة ${num(-left)} يوم` : left <= 7 ? ` · باقي ${num(left)} يوم` : '')),
         (t.condition_ar || t.notes_ar) && h('div', { class: 'qw-meta' },
           t.condition_ar && h('span', { class: 'chip c-mid' }, t.condition_ar), t.notes_ar && h('span', { class: 'faint' }, t.notes_ar)),
         h('div', { class: 'qw-links' },
@@ -212,7 +266,8 @@ export async function renderQuality() {
           h('span', null, 'يُعبّأ في نموذج المنصة: ', h('b', null, t.form.title_ar)),
           single && h('span', { class: 'chip' }, FORM_ST[t.form.records[String(single)]?.status] ?? 'لم يُنشأ بعد'),
           h('button', { class: 'btn small', onclick: () => go('forms', { dept: single ?? shown[0], t: t.form.template_id }) }, 'فتح النموذج')),
-        single ? h('div', { class: 'qw-mine' },
+        t.inactive ? h('div', { class: 'qw-mine' }, h('span', { class: 'chip' }, 'لا تنطبق: لم يُعتمد نمط تدريب للكلية'))
+        : single ? h('div', { class: 'qw-mine' },
           h('span', { class: `chip ${STC[st]}` }, ST[st]),
           sub?.url && h('a', { href: sub.url, target: '_blank', rel: 'noopener' }, 'الشاهد ↗'),
           sub?.review_note_ar && h('span', { class: 'qw-return' }, sub.review_note_ar),
@@ -269,5 +324,5 @@ export async function renderQuality() {
         h('thead', null, h('tr', null, h('th', null, 'المعيار الفرعي'), h('th', null, 'مهام أعمال الجودة المرتبطة'), h('th', null, 'المتطلبات'))),
         h('tbody', null, rows))));
   }
-  return h('div', { class: 'cal-page' }, hero, tabs, body);
+  return h('div', { class: 'cal-page' }, hero, banner, tabs, body);
 }
