@@ -42,10 +42,10 @@ async def export_report(cycle_id: int, key: str, background: BackgroundTasks, f:
     if key not in cr.BY_KEY:
         raise not_found("التقرير غير موجود")
     data = await cr.build_report(conn, cycle_id, key, f, await _depts(conn, user, cycle_id))
-    cur = await conn.execute("SELECT name_ar FROM institution WHERE id = %s", (cycle["institution_id"],))
-    inst = (await cur.fetchone())["name_ar"]
+    cur = await conn.execute("SELECT name_ar, region_ar FROM institution WHERE id = %s", (cycle["institution_id"],))
+    inst = await cur.fetchone()
     out = Path(tempfile.mkdtemp(prefix="aqap-college-")) / "report.xlsx"
-    await run_in_threadpool(cr.to_xlsx, data, inst, cycle["academic_year"], str(out))
+    await run_in_threadpool(cr.to_xlsx, data, inst["name_ar"], cycle["academic_year"], str(out), inst["region_ar"])
     background.add_task(lambda: (out.unlink(missing_ok=True), out.parent.rmdir()))
     name = f"{data['title']}{' - ' + data['filter'] if data['filter'] else ''}.xlsx"
     return FileResponse(out, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

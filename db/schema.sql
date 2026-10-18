@@ -1980,3 +1980,7 @@ CREATE TRIGGER t_audit_pattern_act AFTER INSERT OR UPDATE OR DELETE ON training_
 DROP TRIGGER IF EXISTS t_audit_ext_visit ON external_visit;
 CREATE TRIGGER t_audit_ext_visit AFTER INSERT OR UPDATE OR DELETE ON external_visit FOR EACH ROW EXECUTE FUNCTION trg_audit();
 
+
+-- منطقة المنشأة (تُكتب في ترويسة ملفات الإدارة). آمن للتكرار.
+ALTER TABLE institution ADD COLUMN IF NOT EXISTS region_ar text;
+UPDATE institution SET region_ar = 'المدينة المنورة' WHERE region_ar IS NULL AND name_ar LIKE '%ينبع%';

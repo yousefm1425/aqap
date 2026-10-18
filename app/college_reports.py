@@ -43,7 +43,7 @@ def _share(rows, cols, eq):
 def _exam_one(section_cols):
     def build(dept, t, f):
         r = _first(t, "exams", "exam", f)
-        return [{"dept": dept, **{k: r.get(k) for k in section_cols}}] if r else []
+        return [{"dept": dept, "semester": r.get("semester"), **{k: r.get(k) for k in section_cols}}] if r else []
     return build
 
 
@@ -58,6 +58,7 @@ def _compare(dept, t, f):
             continue
         g = by.setdefault((r.get("specialty"), r["course"]), {"dept": dept, "specialty": r.get("specialty"), "course": r["course"]})
         n = 1 if r["exam"] == "الفصلي الأول" else 2
+        g.setdefault("max", r.get("max"))
         for k in ("registered", "high", "low", "below60", "absent", "deprived"):
             g[f"{k}{n}"] = r.get(k)
         for k in ("below60", "absent", "deprived"):
@@ -263,7 +264,7 @@ async def _l2_rows(conn, cycle_id, flt, depts):
             level = "غير متحقق"
         else:
             level = "متحقق جزئي"
-        out.append({"dept": r["dept"], "std": f"{r['std']} {r['std_title']}", "sub": f"{r['sub']} {r['sub_title']}",
+        out.append({"dept": r["dept"], "std": f"{r['std']} {r['std_title']}", "std_code": r["std"], "sub": f"{r['sub']} {r['sub_title']}",
                     "level": level, "rated": f"{len(rs)} من {len(r['ratings'])}",
                     "actions": (r["closed"] / r["plans"]) if r["plans"] else None})
     return out
@@ -352,47 +353,35 @@ async def build_report(conn: AsyncConnection, cycle_id: int, key: str, flt: str 
             "departments": depts, "source": rep["source"], "source_title": tpl["title_ar"]}
 
 
-def to_xlsx(data: dict, institution: str, year: str, out_path: str) -> None:
+def to_xlsx(data: dict, institution: str, year: str, out_path: str, region: str | None = None) -> None:
+    """ملف بهوية المؤسسة؛ ويُعبّأ في ملف الإدارة الأصلي متى توفر نموذجه."""
+    from . import official_xlsx
+    if official_xlsx.available(data["key"]):
+        official_xlsx.fill(data["key"], data, institution, region, year, out_path)
+        return
     from openpyxl import Workbook
-    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
     from openpyxl.utils import get_column_letter
+    from .xlsx_brand import body_cell, brand, header_cell
     wb = Workbook()
     ws = wb.active
     ws.title = data["title"][:30]
-    ws.sheet_view.rightToLeft = True
     cols = data["columns"]
-    n = len(cols) + 1
-    thin = Side(style="thin", color="BFBFBF")
-    box = Border(left=thin, right=thin, top=thin, bottom=thin)
-    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=n)
-    ws.cell(1, 1, data["title"]).font = Font(bold=True, size=14, color="0B5D46")
-    ws.cell(1, 1).alignment = Alignment(horizontal="center")
-    info = [("المنشأة التدريبية", institution), ("العام التدريبي", year)]
+    info = [("المنطقة", region or ""), ("المنشأة التدريبية", institution), ("العام التدريبي", year)]
     if data["filter"]:
         info.append((data["filter_label"], data["filter"]))
-    for i, (k, v) in enumerate(info):
-        ws.cell(3, 1 + i * 2, k).font = Font(bold=True)
-        ws.cell(3, 2 + i * 2, v)
-    head = 5
+    head = brand(ws, data["title"], info, len(cols) + 1)
     for j, c in enumerate([{"label": "#"}] + cols, 1):
-        cell = ws.cell(head, j, c["label"])
-        cell.fill, cell.font, cell.border = PatternFill("solid", fgColor="0B5D46"), Font(bold=True, color="FFFFFF"), box
-        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-        ws.column_dimensions[get_column_letter(j)].width = 6 if j == 1 else (14 if c.get("type") in ("num", "pct") else 24)
-    ws.row_dimensions[head].height = 48
+        header_cell(ws.cell(head, j, c["label"]))
+        ws.column_dimensions[get_column_letter(j)].width = 6 if j == 1 else (14 if c.get("type") in ("num", "pct") else 26)
+    ws.row_dimensions[head].height = 46
     body = data["rows"] + ([data["total"]] if data["total"] else [])
     for i, r in enumerate(body, 1):
         is_total = r is data["total"]
-        ws.cell(head + i, 1, "" if is_total else i).border = box
+        body_cell(ws.cell(head + i, 1, "" if is_total else i), is_total)
         for j, c in enumerate(cols, 2):
-            v = r.get(c["key"])
-            cell = ws.cell(head + i, j, v)
-            cell.border = box
-            cell.alignment = Alignment(vertical="top", wrap_text=True)
-            if c["type"] == "pct" and isinstance(v, (int, float)):
+            cell = ws.cell(head + i, j, r.get(c["key"]))
+            body_cell(cell, is_total)
+            if c["type"] == "pct" and isinstance(cell.value, (int, float)):
                 cell.number_format = "0.0%"
-            if is_total:
-                cell.font = Font(bold=True)
-                cell.fill = PatternFill("solid", fgColor="E8F3EF")
     ws.freeze_panes = ws.cell(head + 1, 2)
     wb.save(out_path)

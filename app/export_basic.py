@@ -19,31 +19,33 @@ THIN = Side(style="thin", color="BFBFBF")
 BOX = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
 
 
-def _sheet(wb, title, headers, widths):
+def _sheet(wb, title, headers, widths, info=()):
+    from .xlsx_brand import brand, header_cell
     ws = wb.create_sheet(title)
-    ws.sheet_view.rightToLeft = True
-    ws.append(headers)
-    for i, w in enumerate(widths, 1):
+    head = brand(ws, title, list(info), len(headers))
+    for i, (h, w) in enumerate(zip(headers, widths), 1):
         ws.column_dimensions[get_column_letter(i)].width = w
-        c = ws.cell(1, i)
-        c.fill, c.font, c.border = HEAD, Font(bold=True, color="FFFFFF"), BOX
-        c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-    ws.freeze_panes = "A2"
+        header_cell(ws.cell(head, i, h))
+    ws.row_dimensions[head].height = 42
+    ws.freeze_panes = ws.cell(head + 1, 1)
     return ws
 
 
 def _rows(ws, rows):
+    from .xlsx_brand import body_cell
     for r in rows:
         ws.append(r)
         for c in ws[ws.max_row]:
-            c.border = BOX
-            c.alignment = Alignment(vertical="top", wrap_text=True)
+            body_cell(c)
             if isinstance(c.value, str) and c.value in FILL:
                 c.fill = PatternFill("solid", fgColor=FILL[c.value])
+            if isinstance(c.value, str) and len(c.value) > 40:
+                c.alignment = Alignment(horizontal="right", vertical="top", wrap_text=True)
 
 
 async def build_basic(conn: AsyncConnection, cycle_id: int, out_path: str) -> dict:
-    cur = await conn.execute("SELECT title_ar, academic_year FROM assessment_cycle WHERE id = %s", (cycle_id,))
+    cur = await conn.execute("""SELECT c.title_ar, c.academic_year, i.name_ar AS inst, i.region_ar FROM assessment_cycle c
+                                JOIN institution i ON i.id = c.institution_id WHERE c.id = %s""", (cycle_id,))
     cycle = await cur.fetchone()
     cur = await conn.execute(
         """SELECT COALESCE(d.name_ar, 'متطلبات المنشأة') AS dept, s.code AS sc, s.title_ar AS st, ss.code AS ssc,
@@ -73,9 +75,11 @@ async def build_basic(conn: AsyncConnection, cycle_id: int, out_path: str) -> di
 
     wb = Workbook()
     wb.remove(wb.active)
+    info = [("المنطقة", (cycle or {}).get("region_ar") or ""), ("المنشأة التدريبية", (cycle or {}).get("inst") or ""),
+            ("العام التدريبي", (cycle or {}).get("academic_year") or ""), ("الدورة", (cycle or {}).get("title_ar") or "")]
     depts = list(dict.fromkeys(r["dept"] for r in rows))
     ws = _sheet(wb, "ملخص الأقسام", ["القسم", "عدد المتطلبات", "متحقق", "متحقق جزئي", "غير متحقق", "لا ينطبق",
-                                     "غير مقدّر", "بلا شواهد", "نسبة الاستيفاء %"], [26, 14, 11, 12, 12, 11, 11, 11, 16])
+                                     "غير مقدّر", "بلا شواهد", "نسبة الاستيفاء %"], [26, 14, 11, 12, 12, 11, 11, 11, 16], info)
     out = []
     for d in depts:
         xs = [r for r in rows if r["dept"] == d and not r["excluded"]]
@@ -85,19 +89,19 @@ async def build_basic(conn: AsyncConnection, cycle_id: int, out_path: str) -> di
     _rows(ws, out)
 
     stds = list(dict.fromkeys((r["sc"], r["st"]) for r in rows))
-    ws = _sheet(wb, "الاستيفاء حسب المعيار", ["القسم"] + [t for _, t in stds], [26] + [18] * len(stds))
+    ws = _sheet(wb, "الاستيفاء حسب المعيار", ["القسم"] + [t for _, t in stds], [26] + [18] * len(stds), info)
     _rows(ws, [[d] + [score([r for r in rows if r["dept"] == d and r["sc"] == sc]) for sc, _ in stds] for d in depts])
 
     ws = _sheet(wb, "التقديرات التفصيلية", ["القسم", "المعيار", "المعيار الفرعي", "الرمز", "المتطلب", "التقييم الذاتي",
                                             "التقييم الخارجي", "التقدير المعتمد", "الشواهد", "توصية المقيّم"],
-                [20, 20, 26, 9, 60, 13, 13, 13, 9, 40])
+                [20, 20, 26, 9, 60, 13, 13, 13, 9, 40], info)
     _rows(ws, [[r["dept"], r["st"], r["sst"], r["rc"], r["rt"],
                 "لا ينطبق" if r["excluded"] else SELF.get(r["self_rating"], ""), EXT.get(r["ext_verdict"], ""),
                 "لا ينطبق" if r["excluded"] else SELF.get(r["eff_rating"], ""), r["ev"], r["ext_recommendation"] or ""]
                for r in rows])
 
     ws = _sheet(wb, "خطط التحسين", ["القسم", "الرمز", "المتطلب", "الإجراء", "المسؤول", "الموعد", "الحالة", "متأخرة"],
-                [20, 9, 50, 50, 20, 12, 13, 9])
+                [20, 9, 50, 50, 20, 12, 13, 9], info)
     _rows(ws, [[p["dept"], p["requirement_code"], p["requirement_text"], p["action_ar"], p["owner"] or "",
                 p["due_date"].isoformat() if p["due_date"] else "", STATUS.get(p["status"], p["status"]),
                 "نعم" if p["is_overdue"] else ""] for p in plans])
