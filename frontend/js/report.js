@@ -62,7 +62,6 @@ function replay(section, stagger) {
   }, i * stagger));
 }
 function animateEvery(root, sections) {
-  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const run = () => sections.forEach(([sec, stagger]) => replay(sec, stagger));
   requestAnimationFrame(run);
   const id = setInterval(() => {

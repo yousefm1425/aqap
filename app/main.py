@@ -68,6 +68,14 @@ async def dev_token(body: DevTokenIn):
 # الواجهة الأمامية (ملفات ثابتة بلا خطوة بناء)
 _FRONTEND = Path(__file__).resolve().parents[1] / "frontend"
 if _FRONTEND.is_dir():
+    @app.middleware("http")
+    async def no_stale_frontend(request, call_next):
+        # يتحقق المتصفح من الخادم في كل مرة (رد 304 خفيف إن لم يتغير) فتظهر التحديثات فور git pull
+        resp = await call_next(request)
+        if request.url.path.startswith("/app"):
+            resp.headers["Cache-Control"] = "no-cache"
+        return resp
+
     app.mount("/app", StaticFiles(directory=_FRONTEND, html=True), name="frontend")
 
     @app.get("/", include_in_schema=False)

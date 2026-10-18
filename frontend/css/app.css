@@ -331,7 +331,6 @@ select.fu-done { background: #EAF5EE; } select.fu-partial { background: var(--wa
 @keyframes arc-draw { from { stroke-dashoffset: 100; } to { stroke-dashoffset: 0; } }
 @keyframes ring-fill { from { stroke-dasharray: 0 252; } }
 @keyframes ring-pop { 50% { transform: scale(1.06); } }
-@media (prefers-reduced-motion: reduce) { .anim-item.play * { animation: none !important; } }
 @media print { .anim-item.play * { animation: none !important; } } .gauge .hub { fill: var(--ink); }
 .gauge .gl { font-size: 9px; fill: var(--ink-2); text-anchor: middle; }
 
