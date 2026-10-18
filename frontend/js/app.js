@@ -10,12 +10,15 @@ import { renderReport } from './report.js';
 import { renderScope } from './scope.js';
 import { renderCalendar } from './calendar.js';
 import { renderFolders } from './folders.js';
+import { renderGuides } from './guides.js';
+import { renderUsers } from './users.js';
 
 const root = document.getElementById('app');
 export const state = { me: null, cycles: [], cycle: null, departments: [] };
 
 const DASH_ROLES = ['quality_dean', 'quality_auditor', 'system_admin'];
 const canDash = () => state.me.grants.some(g => DASH_ROLES.includes(g.role));
+const canAdmin = () => state.me.grants.some(g => ['quality_dean', 'system_admin'].includes(g.role));
 
 // تمرير الرمز من مزوّد الدخول الموحّد عبر #token=...
 if (location.hash.startsWith('#token=')) {
@@ -59,7 +62,8 @@ function renderLogin(message) {
     h('div', { class: 'field' }, h('label', { for: 'email' }, 'البريد الإلكتروني'), email),
     err,
     h('button', { class: 'btn primary' }, 'دخول'),
-    h('p', { class: 'notice' }, 'وضع التطوير: الدخول بالبريد فقط. في بيئة التشغيل يتم الدخول عبر الحساب الموحّد للمؤسسة.'));
+    h('p', { class: 'notice' }, 'وضع التطوير: الدخول بالبريد فقط. في بيئة التشغيل يتم الدخول عبر الحساب الموحّد للمؤسسة.'),
+    h('a', { href: 'home.html', class: 'faint', style: { textAlign: 'center' } }, '← العودة للصفحة الرئيسية'));
   mount(root, form);
   email.focus();
 }
@@ -75,7 +79,7 @@ function shell(content) {
   const roles = [...new Set(state.me.grants.map(g => ROLE[g.role]))].join('، ');
   return [
     h('header', { class: 'topbar' },
-      h('div', { class: 'brand' }, h('strong', null, 'منصة الجودة والاعتماد'), h('span', null, state.me.institution_name ?? '')),
+      h('a', { class: 'brand', href: 'home.html', title: 'الصفحة الرئيسية' }, h('strong', null, 'منصة الجودة والاعتماد'), h('span', null, state.me.institution_name ?? '')),
       h('nav', { 'aria-label': 'الأقسام الرئيسية' },
         h('a', { href: '#/workspace', 'aria-current': path === 'workspace' ? 'page' : null }, 'التقديرات والشواهد'),
         h('a', { href: '#/minutes', 'aria-current': path === 'minutes' ? 'page' : null }, 'المحاضر'),
@@ -85,6 +89,8 @@ function shell(content) {
         h('a', { href: '#/report', 'aria-current': path === 'report' ? 'page' : null }, 'التقرير النهائي'),
         h('a', { href: '#/folders', 'aria-current': path === 'folders' ? 'page' : null }, 'مجلدات الشواهد'),
         h('a', { href: '#/scope', 'aria-current': path === 'scope' ? 'page' : null }, 'نطاق المتطلبات'),
+        h('a', { href: '#/guides', 'aria-current': path === 'guides' ? 'page' : null }, 'الأدلة'),
+        canAdmin() && h('a', { href: '#/users', 'aria-current': path === 'users' ? 'page' : null }, 'المستخدمون'),
         canDash() && h('a', { href: '#/dashboard', 'aria-current': path === 'dashboard' ? 'page' : null }, 'لوحة المؤشرات')),
       state.cycles.length > 0 && cycleSelect,
       h('div', { class: 'user' },
@@ -96,11 +102,12 @@ function shell(content) {
 
 export async function route() {
   let { path } = parseRoute();
-  if (!['workspace', 'dashboard', 'plans', 'minutes', 'forms', 'report', 'scope', 'calendar', 'folders'].includes(path)) {
+  if (!['workspace', 'dashboard', 'plans', 'minutes', 'forms', 'report', 'scope', 'calendar', 'folders', 'guides', 'users'].includes(path)) {
     path = canDash() ? 'dashboard' : 'workspace';
     history.replaceState(null, '', `#/${path}`);
   }
   if (path === 'dashboard' && !canDash()) { go('workspace'); return; }
+  if (path === 'users' && !canAdmin()) { go('workspace'); return; }
   const content = h('div', { class: 'skeleton' }, 'جارٍ التحميل…');
   mount(root, shell(content));
   if (!state.cycle) {
@@ -110,7 +117,7 @@ export async function route() {
   }
   try {
     const view = path === 'dashboard' ? await renderDashboard() : path === 'plans' ? await renderPlans()
-      : path === 'minutes' ? await renderMinutes() : path === 'forms' ? await renderForms() : path === 'report' ? await renderReport() : path === 'scope' ? await renderScope() : path === 'calendar' ? await renderCalendar() : path === 'folders' ? await renderFolders() : await renderWorkspace();
+      : path === 'minutes' ? await renderMinutes() : path === 'forms' ? await renderForms() : path === 'report' ? await renderReport() : path === 'scope' ? await renderScope() : path === 'calendar' ? await renderCalendar() : path === 'folders' ? await renderFolders() : path === 'guides' ? await renderGuides() : path === 'users' ? await renderUsers() : await renderWorkspace();
     mount(content, view);
     content.className = '';
   } catch (ex) {

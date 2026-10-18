@@ -487,3 +487,18 @@ table.counts td:nth-child(3n+1) { color: #B7811A; font-weight: 700; }
 .fold-sub { padding-inline-start: 1.6rem !important; }
 .fold-cell { display: flex; gap: .4rem; align-items: center; justify-content: flex-end; flex-wrap: wrap; }
 .linkish { background: none; border: 0; padding: 0; color: inherit; text-decoration: underline; cursor: pointer; text-align: start; }
+
+/* الأدلة والمستخدمون */
+.topbar a.brand { color: inherit; text-decoration: none; }
+.guide-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: .8rem; }
+.guide-card { display: flex; gap: .8rem; align-items: flex-start; border: 1px solid var(--line-2); border-radius: 12px; padding: .9rem; background: #fff; }
+.guide-card .row { margin-inline-start: auto; flex-wrap: nowrap; }
+.guide-body { flex: 1; min-width: 0; } .guide-body h3 { font-size: .98rem; margin-bottom: .2rem; }
+.guide-ic { width: 44px; height: 44px; flex: none; border-radius: 12px; display: grid; place-items: center; background: #E8F3EF; font-size: 1.2rem; }
+.guide-ic.pdf { background: #FDECEA; color: #B42318; font-weight: 700; font-size: .78rem; }
+.guide-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: .6rem; align-items: center; margin-bottom: .4rem; }
+.users-table td { vertical-align: top; }
+.users-table tr.inactive td { opacity: .55; }
+.role-chip { display: inline-flex; align-items: center; gap: .3rem; background: var(--primary-soft); color: var(--primary); border-radius: 999px; padding: .1rem .3rem .1rem .7rem; font-size: .8rem; font-weight: 600; }
+.role-chip button { border: 0; background: rgba(0,0,0,.08); border-radius: 50%; width: 1.3rem; height: 1.3rem; cursor: pointer; line-height: 1; color: inherit; }
+.panel > header input { max-width: 260px; border: 1px solid var(--line); border-radius: var(--radius); padding: .4rem .6rem; }
