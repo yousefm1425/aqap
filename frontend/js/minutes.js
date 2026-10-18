@@ -1,3 +1,4 @@
+import { evidenceContext, folderButton, linkBadge, modeHint } from './evfolders.js';
 import { api, apiOpen } from './api.js';
 import { deptName, parseRoute, state, userScope } from './app.js';
 import { dateTime, h, hasRole, mount, num, pct, promptText, toast } from './ui.js';
@@ -307,6 +308,7 @@ export async function renderMinutes() {
               catch (ex) { toast(ex.message, 'error'); } } }, a.title_ar),
             h('div', { class: 'faint' }, `${a.kind === 'link' ? 'رابط' : (a.file_name ?? 'ملف')}${kb(a.size_bytes)}`
               + ` · ${a.added_by_name ?? ''} ${dateTime(a.added_at)}${a.note ? ` · ${a.note}` : ''}`)),
+          a.kind === 'link' && linkBadge(a.link_status),
           linkedNote(a),
           canDetach && h('button', { class: 'btn small danger', 'aria-label': `إزالة ${a.title_ar}`, onclick: () => attachAct(
             () => api(`/minutes/${m.id}/attachments/${a.evidence_id}`, { method: 'DELETE' }), 'أُزيل الشاهد من المحضر (باقٍ في بنك القسم)') },
@@ -342,8 +344,11 @@ export async function renderMinutes() {
         if (!pick.value) throw new Error('اختر شاهداً من القائمة أولاً');
         return api(`/minutes/${m.id}/attachments`, { method: 'POST', body: { evidence_id: Number(pick.value) } });
       }, r => (r?.linked_to_requirement ? 'أُرفق الشاهد ورُبط بالمتطلب' : 'أُرفق الشاهد بالمحضر'));
+      const ctx = await evidenceContext(m.cycle_id, m.department_id);
+      const mode = ctx.settings.attachment_mode;
       attAdder = h('div', { class: 'ev-add' },
-        h('div', { class: 'field' }, title, h('div', { class: 'row' }, file), url),
+        h('div', { class: 'field' }, title, mode !== 'links' && h('div', { class: 'row' }, file), mode !== 'files' && url,
+          h('div', { class: 'row folder-row' }, folderButton(ctx, m.requirement_code), h('span', { class: 'faint' }, modeHint(ctx)))),
         h('button', { class: 'btn primary', style: { alignSelf: 'end' }, onclick: addNew }, 'رفع وإرفاق'),
         pick, h('button', { class: 'btn', onclick: addExisting, disabled: !bank.length }, 'إرفاق'));
     }

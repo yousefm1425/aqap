@@ -1,6 +1,7 @@
 import { api } from './api.js';
 import { deptName, parseRoute, state, userScope } from './app.js';
 import { RATING, RATING_COLOR, RATING_ORDER, STATUS, TRANSITIONS, VERDICT, VERDICT_COLOR } from './labels.js';
+import { evidenceContext, folderButton, linkBadge, modeHint } from './evfolders.js';
 import { date, dateTime, h, hasRole, mount, num, promptText, toast } from './ui.js';
 
 const EDITORS = ['dept_coordinator', 'faculty'];
@@ -234,6 +235,7 @@ export async function renderWorkspace() {
       ? h('ul', { class: 'ev-list' }, d.evidence.map(e => h('li', null,
           h('div', { class: 'grow' }, h('div', null, e.title_ar),
             h('div', { class: 'faint' }, e.kind === 'link' ? 'رابط' : `النسخة ${e.pinned_version_no ?? e.current_version_no ?? '—'}`)),
+          e.kind === 'link' && linkBadge(e.link_status),
           h('button', { class: 'btn small', onclick: async () => {
             try { const r = await api(`/evidence/${e.id}/download`); window.open(r.url, '_blank', 'noopener'); }
             catch (ex) { toast(ex.message, 'error'); }
@@ -293,6 +295,8 @@ export async function renderWorkspace() {
     }
     const linked = new Set(d.evidence.map(e => e.id));
     const bank = bankCache.get(key).filter(e => !linked.has(e.id));
+    const ctx = await evidenceContext(state.cycle.id, d.department_id);
+    const mode = ctx.settings.attachment_mode;
 
     const pick = h('select', { class: 'input', 'aria-label': 'شاهد من بنك الشواهد' },
       h('option', { value: '' }, bank.length ? 'اختر شاهداً موجوداً…' : 'لا توجد شواهد أخرى في بنك القسم'),
@@ -326,8 +330,9 @@ export async function renderWorkspace() {
 
     return h('div', { class: 'ev-add' },
       pick, h('button', { class: 'btn', onclick: linkExisting, disabled: !bank.length }, 'ربط'),
-      h('div', { class: 'field' }, title, h('div', { class: 'row' }, file), url),
-      h('button', { class: 'btn primary', style: { alignSelf: 'end' }, onclick: createNew }, 'رفع وربط'));
+      h('div', { class: 'field' }, title, mode !== 'links' && h('div', { class: 'row' }, file), mode !== 'files' && url,
+        h('div', { class: 'row folder-row' }, folderButton(ctx, d.requirement?.code), h('span', { class: 'faint' }, modeHint(ctx)))),
+      h('button', { class: 'btn primary', style: { alignSelf: 'end' }, onclick: createNew }, mode === 'links' ? 'إرفاق الرابط' : 'رفع وربط'));
   }
 
   await load();

@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from . import db, storage
 from .config import settings
 from .errors import register_error_handlers
-from .routers import actions, applicability, assessments, calendar, cycles, evidence, exports, forms, minutes, reports
+from .routers import actions, applicability, assessments, calendar, evidence_links, cycles, evidence, exports, forms, minutes, reports
 from .security import CurrentUser, current_user, get_conn, issue_dev_token
 
 
@@ -28,7 +28,7 @@ app = FastAPI(title="AQAP API", version="0.1.0",
               description="واجهة برمجية لمنصة إدارة الجودة والاعتماد الأكاديمي", lifespan=lifespan)
 register_error_handlers(app)
 for r in (cycles.router, assessments.router, evidence.router, actions.router, reports.router, exports.router, minutes.router, forms.router,
-          applicability.router, calendar.router):
+          applicability.router, calendar.router, evidence_links.router):
     app.include_router(r, prefix="/api/v1")
 
 

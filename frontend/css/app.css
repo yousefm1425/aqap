@@ -478,3 +478,12 @@ table.counts td:nth-child(3n+1) { color: #B7811A; font-weight: 700; }
 .due.soon { background: #FDF1D8; color: #9A6A0E; } .due.late { background: #FBE6E4; color: var(--not-met); }
 @media (max-width: 980px) { .cal-layout { grid-template-columns: 1fr; } }
 .cal-month { position: sticky; top: 1rem; }
+
+/* مجلدات الشواهد */
+.folder-btn { background: #EEF4FB; border-color: #C9DAF0; color: #1F4E8C; }
+.folder-row { gap: .6rem; margin-top: .3rem; }
+.fold-table td, .fold-table th { vertical-align: middle; }
+.fold-table .fold-std th, .fold-table .fold-root th { text-align: start; font-weight: 700; color: var(--ink); background: #F7FAF9; }
+.fold-sub { padding-inline-start: 1.6rem !important; }
+.fold-cell { display: flex; gap: .4rem; align-items: center; justify-content: flex-end; flex-wrap: wrap; }
+.linkish { background: none; border: 0; padding: 0; color: inherit; text-decoration: underline; cursor: pointer; text-align: start; }

@@ -19,6 +19,7 @@ from ..forms_engine import FormError, clean_follow, clean_plan, compute, empty_p
 from ..forms_pdf import render_pdf
 from ..linking import ACTIVE_CYCLE, link_to_requirement
 from ..schemas import MinutesAttachIn, MinutesTransitionIn
+from .evidence_links import assert_link_ok, assert_uploads_allowed
 from ..security import CurrentUser, current_user, forbid, get_conn, load_cycle, not_found
 
 router = APIRouter(tags=["النماذج"])
@@ -193,6 +194,24 @@ async def _refresh_summary(conn: AsyncConnection, form_id: int) -> None:
     await conn.execute("UPDATE form_record SET summary = %s WHERE id = %s", (Jsonb(s), form_id))
 
 
+def _urls(schema: dict, data) -> set[str]:
+    keys = {c["key"] for sec in schema.get("sections", []) for c in sec.get("columns", []) if c.get("type") == "url"}
+    out: set[str] = set()
+
+    def walk(x):
+        if isinstance(x, dict):
+            for k, v in x.items():
+                if k in keys and isinstance(v, str) and v.strip():
+                    out.add(v.strip())
+                else:
+                    walk(v)
+        elif isinstance(x, (list, tuple)):
+            for v in x:
+                walk(v)
+    walk(data)
+    return out
+
+
 @router.put("/forms/{form_id}")
 async def save_form(form_id: int, body: FormSave, user: CurrentUser = Depends(current_user),
                     conn: AsyncConnection = Depends(get_conn)):
@@ -209,6 +228,8 @@ async def save_form(form_id: int, body: FormSave, user: CurrentUser = Depends(cu
         follow = clean_follow(schema, plan, body.follow_data if body.follow_data is not None else f["follow_data"])
     except FormError as ex:
         raise _bad(ex)
+    for u in _urls(schema, (plan, follow)) - _urls(schema, (f["plan_data"], f["follow_data"])):
+        await assert_link_ok(conn, user.institution_id, u)          # روابط الشواهد داخل النموذج تخضع لسياسة المنشأة
     sets, args = [], []
     if body.plan_data is not None and plan != f["plan_data"]:
         sets.append("plan_data = %s"); args.append(Jsonb(plan))
@@ -354,6 +375,7 @@ async def attach_upload(form_id: int, file: UploadFile = File(...), title_ar: st
     f = await _attach_target(conn, user, form_id)
     if f["status"] == "submitted":
         raise forbid("النموذج بانتظار قرار رئيس القسم؛ أضف الشواهد بعد الاعتماد أو الإعادة")
+    await assert_uploads_allowed(conn, user.institution_id)
     title = (title_ar or "").strip() or (file.filename or "شاهد داعم").rsplit(".", 1)[0]
     if len(title) < 3:
         title = f"شاهد داعم — {title}"

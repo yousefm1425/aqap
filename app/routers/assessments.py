@@ -72,7 +72,7 @@ async def get_assessment(assessment_id: int, user: CurrentUser = Depends(current
              JOIN standard s ON s.id = ss.standard_id WHERE r.id = %s""", (a["department_id"], a["requirement_id"]))
     requirement = await cur.fetchone()
     cur = await conn.execute(
-        """SELECT e.id, e.title_ar, e.kind, e.url, e.current_version_no, ae.pinned_version_no, ae.note, ae.linked_at
+        """SELECT e.id, e.title_ar, e.kind, e.url, e.link_status, e.current_version_no, ae.pinned_version_no, ae.note, ae.linked_at
              FROM assessment_evidence ae JOIN evidence e ON e.id = ae.evidence_id
             WHERE ae.assessment_id = %s ORDER BY ae.linked_at""", (assessment_id,))
     evidence = await cur.fetchall()

@@ -237,3 +237,36 @@ def test_calendar(client, auth):
     did = s11["id"]
     assert client.delete(f"{API}/calendar/{did}", headers=auth(COORD)).status_code == 403
     assert client.delete(f"{API}/calendar/{did}", headers=auth(DEAN)).status_code == 200
+
+
+def test_evidence_links_policy_and_folders(client, auth):
+    """الشواهد بالروابط: سياسة المنشأة، النطاقات المسموحة، مجلدات الأقسام."""
+    s = client.get(f"{API}/settings/evidence", headers=auth(COORD)).json()
+    assert s["attachment_mode"] == "both" and s["can_edit"] is False
+    assert client.put(f"{API}/settings/evidence", headers=auth(COORD), json={"attachment_mode": "links"}).status_code == 403
+    r = client.put(f"{API}/settings/evidence", headers=auth(DEAN),
+                   json={"attachment_mode": "links", "allowed_link_domains": ["https://tvtc-my.sharepoint.com/"]})
+    assert r.status_code == 200 and r.json()["allowed_link_domains"] == ["tvtc-my.sharepoint.com"]
+
+    ok = client.post(f"{API}/evidence", headers=auth(COORD), json={"title_ar": "خطة الإرشاد", "kind": "link", "department_id": 1,
+                     "url": "https://tvtc-my.sharepoint.com/personal/q/Documents/plan.pdf"})
+    assert ok.status_code == 201
+    bad = client.post(f"{API}/evidence", headers=auth(COORD), json={"title_ar": "رابط شخصي", "kind": "link", "department_id": 1,
+                      "url": "https://drive.google.com/file/d/x"})
+    assert bad.status_code == 409 and "النطاقات المعتمدة" in bad.json()["detail"]
+    f = client.post(f"{API}/evidence", headers=auth(COORD), json={"title_ar": "ملف مرفوع", "kind": "file", "department_id": 1}).json()
+    up = client.post(f"{API}/evidence/{f['id']}/versions", headers=auth(COORD), files={"file": ("a.pdf", b"%PDF-1.4", "application/pdf")})
+    assert up.status_code == 403 and "الروابط فقط" in up.json()["detail"]
+
+    url = f"{API}/cycles/1/folders"
+    assert client.put(url, headers=auth(COORD), json={"department_id": 1, "url": "https://tvtc-my.sharepoint.com/f"}).status_code == 403
+    assert client.put(url, headers=auth(DEAN), json={"department_id": 1, "url": "https://evil.example.com/f"}).status_code == 403
+    assert client.put(url, headers=auth(DEAN), json={"department_id": 1, "url": "https://tvtc-my.sharepoint.com/root"}).status_code == 200
+    assert client.put(url, headers=auth(DEAN), json={"department_id": 1, "target_code": "S1.1",
+                                                     "url": "https://tvtc-my.sharepoint.com/s11"}).status_code == 200
+    fs = client.get(f"{url}?department_id=1", headers=auth(COORD)).json()
+    assert {(x["sub_standard_code"], x["url"].rsplit("/", 1)[1]) for x in fs} == {(None, "root"), ("S1.1", "s11")}
+    assert client.get(f"{url}?department_id=1", headers=auth(COORD_EE)).json() == []
+    assert client.get(f"{API}/evidence/links/problems", headers=auth(COORD)).status_code == 200
+    assert client.put(f"{API}/settings/evidence", headers=auth(DEAN),
+                      json={"attachment_mode": "both", "allowed_link_domains": []}).status_code == 200

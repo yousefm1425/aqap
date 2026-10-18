@@ -4,6 +4,7 @@ from psycopg import AsyncConnection
 from .. import storage
 from ..config import settings
 from ..schemas import EvidenceCreate
+from .evidence_links import assert_uploads_allowed
 from ..security import INSTITUTION_WIDE, CurrentUser, current_user, forbid, get_conn, not_found
 
 router = APIRouter(prefix="/evidence", tags=["بنك الشواهد"])
@@ -70,6 +71,7 @@ async def upload_version(evidence_id: int, file: UploadFile = File(...), change_
     ev = await _load(conn, user, evidence_id)
     if not _can_upload(user, ev["department_id"]):
         raise forbid("لا تملك صلاحية رفع نسخ لهذا الشاهد")
+    await assert_uploads_allowed(conn, ev["institution_id"])
     if ev["kind"] == "link":
         raise forbid("الشاهد من نوع رابط لا يقبل ملفات")
 

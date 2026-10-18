@@ -15,6 +15,7 @@ from .. import storage
 from ..linking import link_to_requirement
 from ..minutes_pdf import render_pdf
 from ..schemas import FollowUpIn, MinutesAttachIn, MinutesCreate, MinutesDoc, MinutesTransitionIn
+from .evidence_links import assert_uploads_allowed
 from ..security import CurrentUser, current_user, forbid, get_conn, load_cycle, not_found
 
 router = APIRouter(tags=["المحاضر"])
@@ -91,7 +92,7 @@ async def _full(conn: AsyncConnection, minutes_id: int) -> dict:
     history = await cur.fetchall()
     cur = await conn.execute(
         """SELECT ma.id, ma.evidence_id, ma.note, ma.added_at, u.full_name_ar AS added_by_name,
-                  e.title_ar, e.kind::text AS kind, e.url, e.current_version_no, v.file_name, v.size_bytes,
+                  e.title_ar, e.kind::text AS kind, e.url, e.link_status, e.current_version_no, v.file_name, v.size_bytes,
                   EXISTS (SELECT 1 FROM assessment_evidence ae JOIN assessment a ON a.id = ae.assessment_id
                             JOIN requirement r ON r.id = a.requirement_id
                            WHERE ae.evidence_id = ma.evidence_id AND a.cycle_id = %(c)s
@@ -393,6 +394,7 @@ async def attach_upload(minutes_id: int, file: UploadFile = File(...), title_ar:
     m = await _attach_target(conn, user, minutes_id)
     if m["status"] == "submitted":                     # نفحصها قبل رفع الملف كي لا يبقى ملف يتيم
         raise forbid("المحضر بانتظار قرار رئيس القسم؛ أضف الشواهد بعد الاعتماد أو الإعادة")
+    await assert_uploads_allowed(conn, user.institution_id)
     title = (title_ar or "").strip() or (file.filename or "شاهد داعم").rsplit(".", 1)[0]
     if len(title) < 3:
         title = f"شاهد داعم — {title}"
