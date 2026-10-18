@@ -19,7 +19,7 @@ BOX = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
 FONT = "Sakkal Majalla"
 
 
-def brand(ws, title: str, info: list[tuple[str, str]], ncols: int) -> int:
+def brand(ws, title: str, info: list[tuple[str, str]], ncols: int, institution: str = "") -> int:
     """يرسم الترويسة ويعيد رقم صف رؤوس الأعمدة."""
     ws.sheet_view.rightToLeft = True
     ws.sheet_view.showGridLines = False
@@ -33,22 +33,26 @@ def brand(ws, title: str, info: list[tuple[str, str]], ncols: int) -> int:
         img = XLImage(str(LOGO))
         img.height, img.width = 62, int(62 * 1620 / 396)
         ws.add_image(img, "A1")
+    # الترويسة: شعار المؤسسة العامة للتدريب التقني والمهني، وأسفله اسم الكلية
+    ws.row_dimensions[4].height = 26
+    for c in range(1, ncols + 1):
+        ws.cell(4, c).fill = BAND
+    ws.merge_cells(start_row=4, start_column=1, end_row=4, end_column=3)
+    inst = ws.cell(4, 1, institution)
+    inst.font = Font(name=FONT, bold=True, size=14, color=INK)
+    inst.alignment = Alignment(horizontal="right", vertical="center", indent=2)   # تحت الشعار مباشرة
     tcol = min(4, ncols - 2)
-    ws.merge_cells(start_row=1, start_column=tcol, end_row=2, end_column=ncols)
+    ws.merge_cells(start_row=1, start_column=tcol, end_row=4, end_column=ncols)
     t = ws.cell(1, tcol, title)
     t.font = Font(name=FONT, bold=True, size=18, color=INK)
     t.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-    ws.merge_cells(start_row=3, start_column=tcol, end_row=3, end_column=ncols)
-    s = ws.cell(3, tcol, "الإدارة العامة لجودة التدريب")
-    s.font = Font(name=FONT, size=12, color=INK)
-    s.alignment = Alignment(horizontal="center")
     # بيانات الترويسة في سطر واحد: المنطقة · المنشأة · العام ...
-    ws.merge_cells(start_row=5, start_column=1, end_row=5, end_column=ncols)
-    line = ws.cell(5, 1, "     ·     ".join(f"{k}: {v}" for k, v in info if v not in (None, "")))
+    ws.merge_cells(start_row=6, start_column=1, end_row=6, end_column=ncols)
+    line = ws.cell(6, 1, "     ·     ".join(f"{k}: {v}" for k, v in info if v not in (None, "")))
     line.font = Font(name=FONT, bold=True, size=12, color=INK)
     line.fill, line.alignment = LABEL, Alignment(horizontal="center", vertical="center")
-    ws.row_dimensions[5].height = 22
-    row = 5
+    ws.row_dimensions[6].height = 22
+    row = 6
     ws.oddFooter.right.text = "الإدارة العامة لجودة التدريب"
     ws.oddFooter.left.text = "صفحة &P من &N"
     ws.page_setup.orientation = "landscape"

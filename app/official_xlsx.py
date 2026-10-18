@@ -101,10 +101,42 @@ def _value(key: str, field: str, r: dict):
     return v
 
 
+def _college_under_logo(ws, key: str, institution: str) -> None:
+    """يكتب اسم الكلية أسفل شعار المؤسسة العامة للتدريب التقني والمهني مباشرة."""
+    from openpyxl.styles import Alignment, Font
+    if not ws._images:
+        return
+    anc = ws._images[0].anchor
+    c1, c2 = anc._from.col + 1, max(anc.to.col + 1, anc._from.col + 3)
+    if key == "course_files":                    # الشعار في الصف الأول؛ الاسم في الصف الثاني
+        row, c1, c2 = 2, 2, 5
+    elif key == "skills":                        # رفع الشعار للصفوف 1-3 وكتابة الاسم في الصف الرابع
+        for r in (1, 2, 3):
+            ws.row_dimensions[r].height = 30
+        anc._from.row, anc._from.rowOff = 0, 0
+        anc.to.row, anc.to.rowOff = 3, 0
+        row, c1, c2 = 4, 3, 9
+    else:
+        row = max(anc.to.row + 2, 6)
+    for rng in list(ws.merged_cells.ranges):     # لا تداخل مع دمج قائم في الصف
+        if rng.min_row <= row <= rng.max_row and not (rng.max_col < c1 or rng.min_col > c2):
+            return
+    ref = ws.cell(row, c1)
+    above = ws.cell(max(row - 1, 1), c1)
+    ws.merge_cells(start_row=row, start_column=c1, end_row=row, end_column=c2)
+    ref.value = institution
+    ref.font = Font(name="Sakkal Majalla", bold=True, size=14, color="1F3864")
+    ref.alignment = Alignment(horizontal="center", vertical="center")
+    if above.fill and above.fill.fill_type:
+        ref.fill = copy(above.fill)
+    ws.row_dimensions[row].height = 24
+
+
 def fill(key: str, data: dict, institution: str, region: str | None, year: str, out_path: str) -> None:
     m = MAP[key]
     wb = load_workbook(TPL_DIR / f"{key}.xlsx")
     ws = wb[m["sheet"]] if m.get("sheet") else wb.worksheets[0]
+    _college_under_logo(ws, key, institution)
     y = int(year) if str(year).isdigit() else None
     if region and m.get("region"):
         _put(ws, m["region"], region)

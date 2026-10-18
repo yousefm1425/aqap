@@ -19,10 +19,11 @@ THIN = Side(style="thin", color="BFBFBF")
 BOX = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
 
 
-def _sheet(wb, title, headers, widths, info=()):
+def _sheet(wb, title, headers, widths, info=(), institution=""):
     from .xlsx_brand import brand, header_cell
     ws = wb.create_sheet(title)
-    head = brand(ws, title, list(info), len(headers))
+    head = brand(ws, title, [x for x in info if x[0] != "المنشأة التدريبية"], len(headers),
+                 next((v for k, v in info if k == "المنشأة التدريبية"), ""))
     for i, (h, w) in enumerate(zip(headers, widths), 1):
         ws.column_dimensions[get_column_letter(i)].width = w
         header_cell(ws.cell(head, i, h))

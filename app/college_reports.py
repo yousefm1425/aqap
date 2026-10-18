@@ -366,10 +366,10 @@ def to_xlsx(data: dict, institution: str, year: str, out_path: str, region: str 
     ws = wb.active
     ws.title = data["title"][:30]
     cols = data["columns"]
-    info = [("المنطقة", region or ""), ("المنشأة التدريبية", institution), ("العام التدريبي", year)]
+    info = [("المنطقة", region or ""), ("العام التدريبي", year)]
     if data["filter"]:
         info.append((data["filter_label"], data["filter"]))
-    head = brand(ws, data["title"], info, len(cols) + 1)
+    head = brand(ws, data["title"], info, len(cols) + 1, institution)
     for j, c in enumerate([{"label": "#"}] + cols, 1):
         header_cell(ws.cell(head, j, c["label"]))
         ws.column_dimensions[get_column_letter(j)].width = 6 if j == 1 else (14 if c.get("type") in ("num", "pct") else 26)
