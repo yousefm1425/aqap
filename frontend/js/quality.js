@@ -9,6 +9,7 @@ const STC = { submitted: 'st-upcoming', approved: 'st-done', returned: 'st-overd
 const ORD = ['', 'الأول', 'الثاني', 'الثالث', 'الرابع', 'الخامس', 'السادس', 'السابع', 'الثامن', 'التاسع', 'العاشر', 'الحادي عشر',
   'الثاني عشر', 'الثالث عشر', 'الرابع عشر', 'الخامس عشر', 'السادس عشر', 'السابع عشر', 'الثامن عشر', 'التاسع عشر', 'العشرون'];
 const week = n => `الأسبوع ${ORD[n] ?? n}`;
+const FORM_ST = { draft: 'النموذج: مسودة', submitted: 'النموذج: مرفوع', returned: 'النموذج: مُعاد', approved: 'النموذج: معتمد' };
 
 function statusOf(task, deptId, today) {
   const s = task.submissions[String(deptId)];
@@ -42,19 +43,23 @@ function seedDialog(cycle, reload) {
   }, 'تحميل');
 }
 
-function taskDialog(cycle, task, reload) {
+function taskDialog(cycle, task, reload, templates = []) {
   const wk = h('input', { class: 'input', type: 'number', min: 1, max: 30, required: true, value: task?.week_no ?? '' });
   const title = h('textarea', { class: 'input', rows: 2, required: true }, task?.title_ar ?? '');
   const due = h('input', { class: 'input', type: 'date', value: task?.due_on ?? '' });
   const hint = h('input', { class: 'input', value: task?.due_hint_ar ?? '', placeholder: 'مثال: قبل نهاية الأسبوع السادس (يوم الثلاثاء)' });
   const cond = h('input', { class: 'input', value: task?.condition_ar ?? '', placeholder: 'اختياري: في حال تطبيق ...' });
   const notes = h('input', { class: 'input', value: task?.notes_ar ?? '' });
+  const form = h('select', { class: 'input' }, h('option', { value: '' }, 'بدون نموذج (تُسلَّم برابط)'),
+    templates.map(x => h('option', { value: x.requirement_code, selected: x.requirement_code === task?.form_code },
+      `${x.requirement_code.split('/')[0]} · ${x.title_ar}`)));
   openDialog(task ? 'تعديل المهمة' : 'إضافة مهمة', [
     h('div', { class: 'row' }, field('الأسبوع', wk), field('موعد التسليم', due)),
-    field('المطلوب', title), field('وصف الموعد', hint), field('شرط الانطباق', cond), field('ملاحظات', notes)],
+    field('المطلوب', title), field('وصف الموعد', hint), field('شرط الانطباق', cond), field('ملاحظات', notes),
+    field('نموذج المنصة الذي تُسلَّم منه المهمة', form)],
   async () => {
     const body = { week_no: Number(wk.value), title_ar: title.value, due_on: due.value || null, due_hint_ar: hint.value || null,
-      condition_ar: cond.value || null, notes_ar: notes.value || null };
+      condition_ar: cond.value || null, notes_ar: notes.value || null, form_code: form.value || null };
     await api(task ? `/quality-tasks/${task.id}` : `/cycles/${cycle.id}/quality-tasks`, { method: task ? 'PATCH' : 'POST', body });
     toast('حُفظت المهمة'); reload();
   });
@@ -93,11 +98,17 @@ function submitDialog(task, deptId, reload) {
   const url = h('input', { class: 'input', type: 'url', dir: 'ltr', placeholder: 'https://...sharepoint.com/...', value: prev?.url ?? '' });
   const note = h('textarea', { class: 'input', rows: 2 }, prev?.note_ar ?? '');
   const na = h('input', { type: 'checkbox', onchange: () => { url.disabled = na.checked; } });
+  const rec = task.form?.records[String(deptId)];
+  const fromForm = h('input', { type: 'checkbox', checked: !!rec?.ready, disabled: !rec?.ready,
+    onchange: () => { url.disabled = fromForm.checked || na.checked; } });
+  url.disabled = fromForm.checked;
   if (prev?.status === 'na') { na.checked = true; url.disabled = true; }
   const reqs = task.links.filter(l => l.kind === 'req').length;
   openDialog(`تسليم: ${deptName(deptId)}`, [
     h('p', { class: 'muted' }, task.title_ar),
     prev?.review_note_ar && h('p', { class: 'qw-return' }, `ملاحظة وكالة الجودة: ${prev.review_note_ar}`),
+    task.form && h('label', { class: 'qw-na' }, fromForm, ' التسليم من نموذج المنصة: ', h('b', null, task.form.title_ar),
+      h('small', null, rec?.ready ? ' (معتمد — شاهده جاهز)' : ' (لم يُعتمد بعد؛ عبّئه واعتمده من «الخطط والتقارير»)')),
     field('رابط الشاهد (من مجلد الشواهد على OneDrive / SharePoint)', url),
     field('ملاحظات', note),
     h('label', { class: 'qw-na' }, na, ' المهمة لا تنطبق على القسم', task.condition_ar && h('small', null, ` (${task.condition_ar})`)),
@@ -105,7 +116,8 @@ function submitDialog(task, deptId, reload) {
       : 'لم تُحدد متطلبات لهذه المهمة بعد؛ يُحفظ الشاهد في سجل أعمال الجودة.')],
   async () => {
     const r = await api(`/quality-tasks/${task.id}/submit`, { method: 'POST',
-      body: { department_id: deptId, url: na.checked ? null : url.value, note_ar: note.value || null, not_applicable: na.checked } });
+      body: { department_id: deptId, url: na.checked || fromForm.checked ? null : url.value, note_ar: note.value || null,
+        not_applicable: na.checked, from_form: !na.checked && fromForm.checked } });
     toast(r.status === 'na' ? 'سُجّلت المهمة «لا تنطبق»'
       : `سُلّمت المهمة${r.linked ? ` وربط الشاهد بـ${num(r.linked)} متطلب` : ''}${r.skipped ? ` (تعذر ربط ${num(r.skipped)} متطلب رُفع تقديره)` : ''}`);
     reload();
@@ -134,7 +146,8 @@ function reviewDialog(task, deptId, reload) {
 export async function renderQuality() {
   const cycle = state.cycle;
   const { params } = parseRoute();
-  const [data, catalog] = await Promise.all([api(`/cycles/${cycle.id}/quality-tasks`), api(`/cycles/${cycle.id}/quality-tasks/catalog`)]);
+  const [data, catalog, templates] = await Promise.all([api(`/cycles/${cycle.id}/quality-tasks`),
+    api(`/cycles/${cycle.id}/quality-tasks/catalog`), api(`/cycles/${cycle.id}/forms/templates`).catch(() => [])]);
   const { tasks, departments, today, can_edit: canEdit } = data;
   const deptIds = departments.map(d => d.id);
   const dept = deptIds.includes(Number(params.dept)) ? Number(params.dept) : deptIds.length === 1 ? deptIds[0] : null;
@@ -152,7 +165,7 @@ export async function renderQuality() {
         + 'كل مهمة مربوطة بالمعايير الفرعية والمتطلبات، فيُرفع الشاهد مرة واحدة وينعكس على تقديرات القسم.'),
       canEdit && h('div', { class: 'row cal-actions' },
         !tasks.length && h('button', { class: 'btn gold', onclick: () => seedDialog(cycle, reload) }, 'تحميل جدول أعمال الجودة'),
-        h('button', { class: tasks.length ? 'btn gold' : 'btn ghost', onclick: () => taskDialog(cycle, null, reload) }, '+ إضافة مهمة'))),
+        h('button', { class: tasks.length ? 'btn gold' : 'btn ghost', onclick: () => taskDialog(cycle, null, reload, templates) }, '+ إضافة مهمة'))),
     h('div', { class: 'scope-pick' },
       deptIds.length > 1 && h('label', null, 'القسم ', h('select', { onchange: e => go('quality', { dept: e.target.value, view }) },
         h('option', { value: '' }, 'كل الأقسام'), departments.map(d => h('option', { value: String(d.id), selected: d.id === dept }, d.name_ar)))),
@@ -195,6 +208,10 @@ export async function renderQuality() {
           subs.map(c => h('span', { class: 'qw-sub-chip', title: c }, subTitle[c] ?? c)),
           reqs.length ? h('span', { class: 'chip c-good', title: reqs.map(r => r.title).join('\n') }, `ينعكس على ${num(reqs.length)} متطلب`)
             : canEdit && h('span', { class: 'chip c-mid' }, 'حدّد المتطلبات ليُربط الشاهد تلقائياً')),
+        t.form && h('div', { class: 'qw-form-link' },
+          h('span', null, 'يُعبّأ في نموذج المنصة: ', h('b', null, t.form.title_ar)),
+          single && h('span', { class: 'chip' }, FORM_ST[t.form.records[String(single)]?.status] ?? 'لم يُنشأ بعد'),
+          h('button', { class: 'btn small', onclick: () => go('forms', { dept: single ?? shown[0], t: t.form.template_id }) }, 'فتح النموذج')),
         single ? h('div', { class: 'qw-mine' },
           h('span', { class: `chip ${STC[st]}` }, ST[st]),
           sub?.url && h('a', { href: sub.url, target: '_blank', rel: 'noopener' }, 'الشاهد ↗'),
@@ -210,7 +227,7 @@ export async function renderQuality() {
           }))),
       canEdit && h('div', { class: 'qw-tools' },
         h('button', { class: 'btn small', onclick: () => linksDialog(t, catalog, reload) }, 'التوافق'),
-        h('button', { class: 'btn small', onclick: () => taskDialog(cycle, t, reload) }, 'تعديل'),
+        h('button', { class: 'btn small', onclick: () => taskDialog(cycle, t, reload, templates) }, 'تعديل'),
         h('button', { class: 'btn small', onclick: async () => {
           if (!confirm('حذف المهمة وتسليماتها؟')) return;
           try { await api(`/quality-tasks/${t.id}`, { method: 'DELETE' }); toast('حُذفت'); reload(); } catch (ex) { toast(ex.message, 'error'); }

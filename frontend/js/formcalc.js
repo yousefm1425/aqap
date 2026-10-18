@@ -89,6 +89,7 @@ export function evalSummary(e, rows, tables = {}) {
     }
     case 'sum': { const v = rows.map(r => num(r[e.col])).filter(x => x != null); return v.length ? sum(v) : null; }
     case 'ratio_sums': {
+      if (e.where) rows = rows.filter(r => e.in.includes(r[e.where]));
       const n = rows.map(r => num(r[e.num])).filter(x => x != null);
       const d = sum(rows.map(r => num(r[e.den])).filter(x => x != null));
       return !n.length || !d ? null : sum(n) / d;

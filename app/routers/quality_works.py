@@ -27,36 +27,37 @@ L2_COND = "في حال تطبيق نظام الجودة المستوى الثا�
 COURSE_FILE = ("متابعة تطبيق ورفع ملف المدرب وتوصيف المقرر على منصة التدريب الإلكتروني (البلاك بورد أو تقني) "
                "حسب النموذج المعتمد")
 SKILLS = "تقرير تفعيل منصة المهارات العملية"
-# (الأسبوع، المهمة، إزاحة اليوم، الشرط، ملاحظات، المعايير الفرعية المتوافقة)
+# (الأسبوع، المهمة، إزاحة اليوم، الشرط، ملاحظات، المعايير الفرعية المتوافقة، نموذج المنصة الذي تُسلَّم منه)
+# النموذج المرتبط بمتطلب محدد (مثل 2-2-2) يُضاف متطلبه لتوافق المهمة؛ نماذج «3-1/...» مرتبطة بالمعيار الفرعي فقط
 DEFAULT_TASKS = [
-    (3, "تقرير متابعة تنفيذ تحقيق منهجية قياس أنماط التدريب المختلفة", 4, PATTERNS_COND, "نماذج منهجية قياس أنماط التدريب", ["4-1"]),
-    (3, "بدء أعمال التدقيق الذاتي لتطبيق نظام جودة التدريب (المستوى الثاني)", 4, L2_COND, None, ["6-1"]),
-    (4, COURSE_FILE, 0, None, "متابعة تطبيق ملف المقرر على جميع المقررات وحسب الشعب", ["3-3", "4-3"]),
-    (5, "تقرير جاهزية القسم لبدء الاختبار الفصلي الأول", 4, None, None, ["3-1"]),
-    (6, "التقرير الشهري الأول لتفعيل منصة المهارات العملية (من بداية الأسبوع 2 إلى نهاية 5)", 2, None, None, ["4-1"]),
-    (7, "تقرير تنفيذ الاختبار الفصلي الأول حسب اللوائح المنظمة (حسب الأسبوع المنفذ 6 أو 7)", 3, None, None, ["3-1"]),
-    (7, "تقرير متابعة تنفيذ تحقيق منهجية قياس أنماط التدريب المختلفة", 4, PATTERNS_COND, "نماذج منهجية قياس أنماط التدريب", ["4-1"]),
-    (8, "تقرير تحليل نتائج المتدربين للاختبار الفصلي الأول", 4, None, None, ["3-1", "2-2"]),
-    (8, COURSE_FILE, 4, None, "متابعة تطبيق ملف المقرر على جميع المقررات وحسب الشعب", ["3-3", "4-3"]),
-    (9, "تقرير الإجراءات التحسينية لتحليل نتائج الاختبار الفصلي الأول", 2, None, None, ["3-1"]),
-    (10, "التقرير الشهري الثاني لتفعيل منصة المهارات العملية (من بداية الأسبوع 6 إلى نهاية 9)", 2, None, None, ["4-1"]),
-    (11, "تقرير جاهزية القسم لبدء الاختبار الفصلي الثاني", 4, None, None, ["3-1"]),
-    (11, "تقرير متابعة تنفيذ تحقيق نظام جودة التدريب (المستوى الثاني)", 4, L2_COND, None, ["6-1"]),
-    (12, "تقرير متطلبات وتهيئة المتدربين لقياس جودة مخرجات التدريب", 2, None, None, ["2-2"]),
-    (13, "تقرير تنفيذ الاختبار الفصلي الثاني حسب اللوائح المنظمة (حسب الأسبوع المنفذ 12 أو 13)", 3, None, None, ["3-1"]),
-    (14, "التقرير الشهري الثالث لتفعيل منصة المهارات العملية (من بداية الأسبوع 10 إلى نهاية 13)", 2, None, None, ["4-1"]),
+    (3, "تقرير متابعة تنفيذ تحقيق منهجية قياس أنماط التدريب المختلفة", 4, PATTERNS_COND, "نماذج منهجية قياس أنماط التدريب", ["4-1"], None),
+    (3, "بدء أعمال التدقيق الذاتي لتطبيق نظام جودة التدريب (المستوى الثاني)", 4, L2_COND, None, ["6-1"], None),
+    (4, COURSE_FILE, 0, None, "متابعة تطبيق ملف المقرر على جميع المقررات وحسب الشعب", ["4-1"], "4-1-3"),
+    (5, "تقرير جاهزية القسم لبدء الاختبار الفصلي الأول", 4, None, None, ["3-1"], "3-1/جاهزية"),
+    (6, "التقرير الشهري الأول لتفعيل منصة المهارات العملية (من بداية الأسبوع 2 إلى نهاية 5)", 2, None, None, ["4-1"], None),
+    (7, "تقرير تنفيذ الاختبار الفصلي الأول حسب اللوائح المنظمة (حسب الأسبوع المنفذ 6 أو 7)", 3, None, None, ["3-1"], "3-1/تنفيذ"),
+    (7, "تقرير متابعة تنفيذ تحقيق منهجية قياس أنماط التدريب المختلفة", 4, PATTERNS_COND, "نماذج منهجية قياس أنماط التدريب", ["4-1"], None),
+    (8, "تقرير تحليل نتائج المتدربين للاختبار الفصلي الأول", 4, None, None, ["3-1", "2-2"], "2-2-2"),
+    (8, COURSE_FILE, 4, None, "متابعة تطبيق ملف المقرر على جميع المقررات وحسب الشعب", ["4-1"], "4-1-3"),
+    (9, "تقرير الإجراءات التحسينية لتحليل نتائج الاختبار الفصلي الأول", 2, None, None, ["3-1"], "2-2-2"),
+    (10, "التقرير الشهري الثاني لتفعيل منصة المهارات العملية (من بداية الأسبوع 6 إلى نهاية 9)", 2, None, None, ["4-1"], None),
+    (11, "تقرير جاهزية القسم لبدء الاختبار الفصلي الثاني", 4, None, None, ["3-1"], "3-1/جاهزية"),
+    (11, "تقرير متابعة تنفيذ تحقيق نظام جودة التدريب (المستوى الثاني)", 4, L2_COND, None, ["6-1"], None),
+    (12, "تقرير متطلبات وتهيئة المتدربين لقياس جودة مخرجات التدريب", 2, None, None, ["2-2"], None),
+    (13, "تقرير تنفيذ الاختبار الفصلي الثاني حسب اللوائح المنظمة (حسب الأسبوع المنفذ 12 أو 13)", 3, None, None, ["3-1"], "3-1/تنفيذ"),
+    (14, "التقرير الشهري الثالث لتفعيل منصة المهارات العملية (من بداية الأسبوع 10 إلى نهاية 13)", 2, None, None, ["4-1"], None),
     (14, "تقرير تنفيذ قياس جودة مخرجات التدريب", 4, None,
-     "قبل نهاية الأسبوع الرابع عشر أو بعد تنفيذ الاختبار حسب الموعد المحدد من الإدارة المعنية", ["2-2"]),
-    (14, "تقرير الإجراءات التحسينية لتحليل نتائج الاختبار الفصلي الثاني", 4, None, None, ["3-1"]),
-    (14, "تقرير جاهزية القسم لبدء الاختبارات النهائية", 4, None, None, ["3-1"]),
-    (15, "متابعة تنفيذ الخطط التحسينية لملاحظات تحليل نتائج الاختبارين الفصليين الأول والثاني وتنفيذ التوصيات", 4, None, None, ["3-1", "6-4"]),
-    (15, "تقرير تحليل نتائج المتدربين للاختبار الفصلي الثاني ومقارنتها بنتائج الاختبار الفصلي الأول", 2, None, None, ["3-1", "2-2"]),
+     "قبل نهاية الأسبوع الرابع عشر أو بعد تنفيذ الاختبار حسب الموعد المحدد من الإدارة المعنية", ["2-2"], None),
+    (14, "تقرير الإجراءات التحسينية لتحليل نتائج الاختبار الفصلي الثاني", 4, None, None, ["3-1"], "2-2-2"),
+    (14, "تقرير جاهزية القسم لبدء الاختبارات النهائية", 4, None, None, ["3-1"], "3-1/جاهزية"),
+    (15, "متابعة تنفيذ الخطط التحسينية لملاحظات تحليل نتائج الاختبارين الفصليين الأول والثاني وتنفيذ التوصيات", 4, None, None, ["3-1", "6-4"], "2-2-2"),
+    (15, "تقرير تحليل نتائج المتدربين للاختبار الفصلي الثاني ومقارنتها بنتائج الاختبار الفصلي الأول", 2, None, None, ["3-1", "2-2"], "2-2-2"),
     (15, "تقرير الإجراءات التحسينية لتحليل نتائج الاختبار (فصلي - نهائي)", 2, None,
-     "متابعة تسليم الإجراءات التحسينية لتحليل نتائج الاختبارين الفصليين الأول والثاني", ["3-1"]),
-    (15, "تقرير متابعة تنفيذ تحقيق نظام جودة التدريب (المستوى الثاني)", 4, L2_COND, None, ["6-1"]),
-    (18, "تقرير خطط تحسين قياس جودة مخرجات التدريب", 4, None, None, ["2-2"]),
-    (18, "تقرير التقييم النهائي لمنصة المهارات العملية", 4, None, None, ["4-1"]),
-    (19, "تقرير تنفيذ الاختبارات النهائية", 4, None, None, ["3-1"]),
+     "متابعة تسليم الإجراءات التحسينية لتحليل نتائج الاختبارين الفصليين الأول والثاني", ["3-1"], "2-2-2"),
+    (15, "تقرير متابعة تنفيذ تحقيق نظام جودة التدريب (المستوى الثاني)", 4, L2_COND, None, ["6-1"], None),
+    (18, "تقرير خطط تحسين قياس جودة مخرجات التدريب", 4, None, None, ["2-2"], "2-2-1"),
+    (18, "تقرير التقييم النهائي لمنصة المهارات العملية", 4, None, None, ["4-1"], None),
+    (19, "تقرير تنفيذ الاختبارات النهائية", 4, None, None, ["3-1"], "3-1/تنفيذ"),
 ]
 
 
@@ -75,6 +76,7 @@ class TaskIn(BaseModel):
     due_hint_ar: str | None = Field(default=None, max_length=300)
     condition_ar: str | None = Field(default=None, max_length=300)
     notes_ar: str | None = Field(default=None, max_length=1000)
+    form_code: str | None = Field(default=None, max_length=50)
 
 
 class SeedIn(BaseModel):
@@ -91,6 +93,7 @@ class SubmitIn(BaseModel):
     url: str | None = Field(default=None, max_length=2000)
     note_ar: str | None = Field(default=None, max_length=1000)
     not_applicable: bool = False
+    from_form: bool = False         # التسليم من نموذج المنصة المعتمد (شاهده مولّد تلقائياً)
 
 
 class ReviewIn(BaseModel):
@@ -168,7 +171,22 @@ async def list_tasks(cycle_id: int, user: CurrentUser = Depends(current_user), c
              LEFT JOIN app_user u ON u.id = s.submitted_by
             WHERE s.task_id = ANY(%s) AND s.department_id = ANY(%s)""", (tids, ids))
     subs = await cur.fetchall()
+    codes = sorted({t["form_code"] for t in tasks if t["form_code"]})
+    cur = await conn.execute(
+        """SELECT t.id, t.requirement_code AS code, t.title_ar FROM form_template t JOIN framework f ON f.code = t.framework_code
+             JOIN assessment_cycle c ON c.framework_id = f.id WHERE c.id = %s AND t.requirement_code = ANY(%s)""", (cycle_id, codes))
+    tpls = {x["code"]: x for x in await cur.fetchall()}
+    cur = await conn.execute(
+        """SELECT template_id, department_id, id AS form_id, status, evidence_id FROM form_record
+            WHERE cycle_id = %s AND department_id = ANY(%s) AND template_id = ANY(%s)""",
+        (cycle_id, ids, [x["id"] for x in tpls.values()]))
+    recs = await cur.fetchall()
     for t in tasks:
+        tpl = tpls.get(t["form_code"])
+        t["form"] = tpl and {"template_id": tpl["id"], "title_ar": tpl["title_ar"],
+                             "records": {str(r["department_id"]): {"form_id": r["form_id"], "status": r["status"],
+                                                                   "ready": r["evidence_id"] is not None}
+                                         for r in recs if r["template_id"] == tpl["id"]}}
         t["links"] = [x for x in links if x["task_id"] == t["id"]]
         t["submissions"] = {str(s["department_id"]): s for s in subs if s["task_id"] == t["id"]}
     return {"can_edit": user.has(*MANAGERS), "today": date.today(), "departments": departments, "tasks": tasks}
@@ -195,9 +213,10 @@ async def create_task(cycle_id: int, body: TaskIn, user: CurrentUser = Depends(c
     _manager(user)
     await _actor(conn, user)
     cur = await conn.execute(
-        """INSERT INTO quality_task (cycle_id, week_no, title_ar, due_on, due_hint_ar, condition_ar, notes_ar, created_by)
-           VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
-        (cycle_id, body.week_no, body.title_ar.strip(), body.due_on, body.due_hint_ar, body.condition_ar, body.notes_ar, user.id))
+        """INSERT INTO quality_task (cycle_id, week_no, title_ar, due_on, due_hint_ar, condition_ar, notes_ar, form_code, created_by)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
+        (cycle_id, body.week_no, body.title_ar.strip(), body.due_on, body.due_hint_ar, body.condition_ar, body.notes_ar,
+         body.form_code or None, user.id))
     return {"id": (await cur.fetchone())["id"]}
 
 
@@ -211,17 +230,25 @@ async def seed_tasks(cycle_id: int, body: SeedIn, user: CurrentUser = Depends(cu
         raise forbid("جدول أعمال الجودة محمّل مسبقاً لهذه الدورة")
     start = body.semester_start - timedelta(days=(body.semester_start.weekday() + 1) % 7)   # أحد ذلك الأسبوع
     await _actor(conn, user)
-    for i, (week, title, off, cond, notes, subs) in enumerate(DEFAULT_TASKS):
+    for i, (week, title, off, cond, notes, subs, form) in enumerate(DEFAULT_TASKS):
         cur = await conn.execute(
-            """INSERT INTO quality_task (cycle_id, week_no, title_ar, due_on, due_hint_ar, condition_ar, notes_ar, sort_order, created_by)
-               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
-            (cycle_id, week, title, start + timedelta(days=(week - 1) * 7 + off), hint_for(week, off), cond, notes, i, user.id))
+            """INSERT INTO quality_task (cycle_id, week_no, title_ar, due_on, due_hint_ar, condition_ar, notes_ar, sort_order,
+                                          form_code, created_by)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
+            (cycle_id, week, title, start + timedelta(days=(week - 1) * 7 + off), hint_for(week, off), cond, notes, i,
+             form, user.id))
         tid = (await cur.fetchone())["id"]
         await conn.execute(
             """INSERT INTO quality_task_link (task_id, sub_standard_id)
                SELECT %s, ss.id FROM sub_standard ss JOIN standard s ON s.id = ss.standard_id
                 WHERE s.framework_id = %s AND ss.code = ANY(%s) ON CONFLICT DO NOTHING""",
             (tid, cycle["framework_id"], subs))
+        if form and "/" not in form:
+            await conn.execute(
+                """INSERT INTO quality_task_link (task_id, requirement_id)
+                   SELECT %s, r.id FROM requirement r JOIN sub_standard ss ON ss.id = r.sub_standard_id
+                     JOIN standard s ON s.id = ss.standard_id WHERE s.framework_id = %s AND r.code = %s
+                   ON CONFLICT DO NOTHING""", (tid, cycle["framework_id"], form))
     return {"created": len(DEFAULT_TASKS)}
 
 
@@ -231,9 +258,10 @@ async def update_task(task_id: int, body: TaskIn, user: CurrentUser = Depends(cu
     _manager(user)
     await _actor(conn, user)
     await conn.execute(
-        """UPDATE quality_task SET week_no = %s, title_ar = %s, due_on = %s, due_hint_ar = %s, condition_ar = %s, notes_ar = %s
-            WHERE id = %s""",
-        (body.week_no, body.title_ar.strip(), body.due_on, body.due_hint_ar, body.condition_ar, body.notes_ar, task_id))
+        """UPDATE quality_task SET week_no = %s, title_ar = %s, due_on = %s, due_hint_ar = %s, condition_ar = %s, notes_ar = %s,
+                  form_code = %s WHERE id = %s""",
+        (body.week_no, body.title_ar.strip(), body.due_on, body.due_hint_ar, body.condition_ar, body.notes_ar,
+         body.form_code or None, task_id))
     return {"id": task_id}
 
 
@@ -294,6 +322,15 @@ async def submit_task(task_id: int, body: SubmitIn, user: CurrentUser = Depends(
         if not (body.note_ar or "").strip():
             raise forbid("اكتب سبب عدم الانطباق في الملاحظة")
         evidence_id, linked, skipped, status = None, 0, 0, "na"
+    elif body.from_form:
+        cur = await conn.execute(
+            """SELECT r.evidence_id, r.status FROM form_record r JOIN form_template ft ON ft.id = r.template_id
+                WHERE r.cycle_id = %s AND r.department_id = %s AND ft.requirement_code = %s""",
+            (t["cycle_id"], dept, t["form_code"] or ""))
+        rec = await cur.fetchone()
+        if rec is None or rec["evidence_id"] is None:
+            raise forbid("لم يُعتمد نموذج المنصة لهذه المهمة بعد؛ عبّئ النموذج واعتمده من «الخطط والتقارير» ثم سلّم المهمة")
+        evidence_id, status = rec["evidence_id"], "submitted"
     else:
         url = (body.url or "").strip()
         if not url:

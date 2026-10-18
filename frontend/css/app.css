@@ -561,3 +561,4 @@ dialog:has(.qw-form) { width: min(40rem, 94vw); }
 .qw-rlist li.hit { background: #E3F4EA; border-radius: 6px; padding: 0 .3rem; }
 .qw-w { color: #0F5C4A; font-weight: 700; font-size: .75rem; white-space: nowrap; }
 @media (max-width: 640px) { .qw-week { grid-template-columns: 1fr; } .qw-wk { position: static; flex-direction: row; gap: .5rem; justify-content: center; } .qw-task { flex-wrap: wrap; } .qw-tools { flex-direction: row; } }
+.qw-form-link { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; background: #F3F8F6; border: 1px dashed #BFD9CF; border-radius: 9px; padding: .35rem .6rem; font-size: .8rem; }

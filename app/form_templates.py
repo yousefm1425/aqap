@@ -18,6 +18,7 @@ WEEKS = ["الأول", "الثاني", "الثالث", "الرابع", "الخا
          "الثامن عشر", "التاسع عشر"]
 TRAINER_STATUS = ["غير مفرغ وغير مجاز", "مفرغ", "مفرغ جزئياً", "مجاز", "مكلف خارج المنشأة"]
 YES_NO = ["نعم", "لا"]
+EXAMS = ["الفصلي الأول", "الفصلي الثاني", "النهائي"]
 
 # مؤشرات الأداء التشغيلية الواردة في خطة المبادرات (مؤشرات المؤسسة، لا تخص قسماً) — اقتراحات قابلة للتعديل
 OPERATIONAL_KPIS = [
@@ -581,8 +582,15 @@ TEMPLATES: list[dict] = [
              "columns": [{"key": "below60_pct", "label": "نسبة الأقل من 60٪", "format": "pct", "expr": {"op": "ratio_sums", "num": "below60", "den": "registered"}},
                          {"key": "absent_pct", "label": "نسبة الغياب", "format": "pct", "expr": {"op": "ratio_sums", "num": "absent", "den": "registered"}},
                          {"key": "deprived_pct", "label": "نسبة الحرمان", "format": "pct", "expr": {"op": "ratio_sums", "num": "deprived", "den": "registered"}}]},
+            {"key": "compare", "type": "pivot", "title": "مقارنة نتائج الاختبارين الفصليين الأول والثاني لكل مقرر", "source": "courses",
+             "group_by": "course", "group_label": "المقرر",
+             "help": "تُحسب تلقائياً من صفوف الجدول أعلاه؛ لا تحتاج إلى إدخال.",
+             "columns": [{"key": f"{k}_{i}", "label": f"{lbl} — {ex}", "format": "pct",
+                          "expr": {"op": "ratio_sums", "num": k, "den": "registered", "where": "exam", "in": [ex]}}
+                         for k, lbl in (("below60", "أقل من 60٪"), ("absent", "الغياب"), ("deprived", "الحرمان"))
+                         for i, ex in ((1, "الفصلي الأول"), (2, "الفصلي الثاني"))]},
             {"key": "recommendations", "type": "text", "title": "التوصيات", "phase": "follow"},
-        ]},
+        ], "improvements_exam": True},
     },
     {
         "requirement_code": "2-2-4", "kind": "plan", "sort_order": 15,
@@ -689,6 +697,53 @@ TEMPLATES: list[dict] = [
     },
 
     # ------------------------------------------------------------------ المعيار الثالث: المناهج وأدوات القياس والتقويم
+    # نموذجا أعمال الاختبارات (ملفات الإدارة): مرتبطان بالمعيار الفرعي 3-1، وربط المتطلب يحدده وكيل الجودة من «التوافق»
+    {
+        "requirement_code": "3-1/جاهزية", "kind": "report", "sort_order": 21,
+        "title_ar": "تقرير جاهزية القسم لبدء الاختبار (فصلي أول – فصلي ثانٍ – نهائي)",
+        "guidance_ar": "صف لكل اختبار يُعبّأ قبل موعده: إبلاغ المتدربين، ومواءمة الأسئلة مع الخطط، وكفاية الخامات، وجاهزية القاعات والورش.",
+        "schema": {"sections": [
+            {"key": "exams", "type": "table", "title": "جاهزية القسم لبدء الاختبار", "phase": "follow", "max_rows": 6,
+             "columns": [col("semester", "الفصل التدريبي", "select", "follow", options=SEMESTERS, required=True),
+                         col("exam", "الاختبار", "select", "follow", options=EXAMS, required=True),
+                         col("notify", "إبلاغ المتدربين بالأسبوع المحدد للاختبار", "select", "follow", options=YES_NO, required=True),
+                         col("courses", "عدد المقررات التدريبية", "number", "follow", required=True),
+                         col("aligned", "التأكد من أسئلة الاختبارات ومواءمتها مع الخطط التدريبية والأهداف", "select", "follow",
+                             options=YES_NO, required=True),
+                         col("materials", "كفاية العدد والخامات اللازمة لتنفيذ الاختبار", "select", "follow", options=YES_NO, required=True),
+                         col("halls", "جاهزية القاعات والورش والتجهيزات لتنفيذ الاختبار", "select", "follow", options=YES_NO, required=True),
+                         col("notes", "ملاحظات", "longtext", "follow")],
+             "summary": [{"key": "ready_pct", "label": "نسبة الجاهزية", "format": "pct",
+                          "expr": {"op": "share_eq", "cols": ["notify", "aligned", "materials", "halls"], "eq": "نعم",
+                                   "denominator": "filled"}},
+                         {"key": "n", "label": "عدد الاختبارات", "format": "num", "expr": {"op": "count"}}]},
+        ], "progress": {"section": "exams", "summary": "ready_pct"}},
+    },
+    {
+        "requirement_code": "3-1/تنفيذ", "kind": "report", "sort_order": 21,
+        "title_ar": "تقرير تنفيذ الاختبار حسب اللوائح المنظمة (فصلي أول – فصلي ثانٍ – نهائي)",
+        "guidance_ar": "صف لكل اختبار يُعبّأ بعد تنفيذه: المقررات المختبرة في موعدها أو بتغيير الموعد، والنظرية والعملية، والغائبون، "
+                       "ورصد النتائج، والتغذية الراجعة للمتدربين.",
+        "schema": {"sections": [
+            {"key": "exams", "type": "table", "title": "تنفيذ الاختبار", "phase": "follow", "max_rows": 6,
+             "columns": [col("semester", "الفصل التدريبي", "select", "follow", options=SEMESTERS, required=True),
+                         col("exam", "الاختبار", "select", "follow", options=EXAMS, required=True),
+                         col("ontime", "في الوقت المحدد", "number", "follow", required=True, group="عدد المقررات المختبرة"),
+                         col("moved", "تغيّر الموعد", "number", "follow", group="عدد المقررات المختبرة"),
+                         col("theory", "نظري", "number", "follow", group="عدد المقررات التدريبية"),
+                         col("practical", "عملي", "number", "follow", group="عدد المقررات التدريبية"),
+                         comp("tested", "مجموع المختبرة", {"op": "add", "of": ["ontime", "moved"]}, "num", group="عدد المقررات المختبرة"),
+                         comp("ontime_pct", "نسبة المختبرة في موعدها", {"op": "ratio", "a": "ontime", "b": "tested"}),
+                         col("absent", "عدد المتدربين الغائبين", "number", "follow"),
+                         col("recorded", "رصد النتائج", "select", "follow", options=YES_NO, required=True),
+                         col("feedback", "تغذية راجعة للمتدربين", "select", "follow", options=YES_NO, required=True),
+                         col("notes", "ملاحظات", "longtext", "follow")],
+             "summary": [{"key": "ontime_pct", "label": "نسبة المقررات المختبرة في موعدها", "format": "pct",
+                          "expr": {"op": "ratio_sums", "num": "ontime", "den": "tested"}},
+                         {"key": "done_pct", "label": "رصد النتائج والتغذية الراجعة", "format": "pct",
+                          "expr": {"op": "share_eq", "cols": ["recorded", "feedback"], "eq": "نعم", "denominator": "filled"}}]},
+        ], "progress": {"section": "exams", "summary": "done_pct"}},
+    },
     {
         "requirement_code": "3-1-2", "kind": "report", "sort_order": 21,
         "title_ar": "تقارير اللجان لمراجعة توافق أسئلة الاختبارات المختلفة (فصلي – نهائي) مع المهارات والمعارف المعتمدة، والتوصيات",
@@ -1084,5 +1139,9 @@ TEMPLATES: list[dict] = [
     },
 ]
 
+# الإجراءات التحسينية لتحليل نتائج الاختبار: الجدول الموحد نفسه مع تحديد الاختبار
+IMPROVEMENTS_EXAM = {**IMPROVEMENTS, "title": "الإجراءات التحسينية لتحليل نتائج الاختبار",
+                     "columns": [col("exam", "الاختبار", "select", "follow", options=EXAMS)] + IMPROVEMENTS["columns"]}
+
 for _t in TEMPLATES:
-    _t["schema"]["sections"].append(IMPROVEMENTS)
+    _t["schema"]["sections"].append(IMPROVEMENTS_EXAM if _t["schema"].pop("improvements_exam", False) else IMPROVEMENTS)

@@ -339,4 +339,8 @@ def test_quality_works(client, auth):
     assert client.post(f"{API}/quality-tasks/{first['id']}/submit", headers=auth(COORD),
                        json={"department_id": 1, "not_applicable": True, "note_ar": "القسم لا يطبق التدريب عن بعد"}).json()["status"] == "na"
     assert len(client.get(f"{base}/catalog", headers=auth(COORD)).json()) >= 1
+    exam = next(x for x in tasks if x["form_code"] == "3-1/جاهزية")
+    assert exam["form"] and exam["form"]["records"] == {}                    # المهمة تفتح نموذج الجاهزية
+    r = client.post(f"{API}/quality-tasks/{exam['id']}/submit", headers=auth(COORD), json={"department_id": 1, "from_form": True})
+    assert r.status_code == 403 and "لم يُعتمد" in r.json()["detail"]      # لا تسليم قبل اعتماد النموذج
     assert client.delete(f"{API}/quality-tasks/{t}", headers=auth(COORD)).status_code == 403

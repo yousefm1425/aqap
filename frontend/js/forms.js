@@ -2,6 +2,10 @@ import { api, apiOpen } from './api.js';
 import { deptName, parseRoute, state, userScope } from './app.js';
 import { compute, fmt, isEmpty, mergedRows, tablePhase } from './formcalc.js';
 import { dateTime, h, hasRole, mount, num, pct, promptText, toast } from './ui.js';
+// نماذج أعمال الاختبارات ترتبط بمعيار فرعي (الرمز «3-1/...») لا بمتطلب واحد
+const reqLabel = x => x.requirement_code.includes('/')
+  ? `المعيار الفرعي ${x.requirement_code.split('/')[0]} — يُحدد المتطلب المرتبط من «التوافق» في أعمال الجودة`
+  : `المتطلب ${x.requirement_code}: ${x.requirement_text ?? ''}`;
 
 const DEPT_ROLES = ['hod', 'dept_coordinator', 'faculty'];
 const STATUS = { draft: 'مسودة', submitted: 'بانتظار اعتماد رئيس القسم', returned: 'معاد للتعديل', approved: 'معتمد' };
@@ -71,7 +75,7 @@ export async function renderForms() {
       const p = rec?.summary?.progress;
       return [header, h('button', { type: 'button', class: 'req-item', 'aria-current': String(t.id === selected), onclick: () => select(t.id) },
         h('span', { class: `dot ${rec?.status === 'approved' ? 'r-met' : rec ? 'r-partial' : 'r-none'}` }),
-        h('span', { class: 'code' }, `${t.requirement_code} · ${KIND[t.kind]}${t.is_provisional ? ' · مبدئي' : ''}`),
+        h('span', { class: 'code' }, `${t.requirement_code.split('/')[0]} · ${KIND[t.kind]}${t.is_provisional ? ' · مبدئي' : ''}`),
         h('span', { class: 'meta' }, rec ? h('span', { class: `status ${STATUS_CLASS[rec.status]}` }, STATUS[rec.status])
           : h('span', { class: 'faint' }, 'لم يُنشأ'), p != null && h('span', { class: 'faint' }, pct(p * 100))),
         h('span', { class: 'text' }, t.title_ar))];
@@ -103,13 +107,13 @@ export async function renderForms() {
     if (!rec) {
       const can = isDept() && ACTIVE.includes(cycle.status);
       mount(detailEl, h('section', null,
-        h('div', { class: 'crumbs' }, `المتطلب ${t.requirement_code}: ${t.requirement_text ?? ''}`),
+        h('div', { class: 'crumbs' }, reqLabel(t)),
         h('h2', null, t.title_ar),
         t.is_provisional && h('div', { class: 'notice' }, 'نموذج مبدئي إلى أن يُعتمد النموذج الرسمي لهذا المتطلب.'),
         t.guidance_ar && h('p', { class: 'muted' }, t.guidance_ar),
         can ? h('div', null, h('button', { class: 'btn primary', onclick: () => act(
           () => api(`/cycles/${cycle.id}/forms`, { method: 'POST', body: { template_id: t.id, department_id: dept } }),
-          `أُنشئ نموذج ${t.requirement_code}`) }, 'إنشاء النموذج'))
+          `أُنشئ نموذج ${t.title_ar}`) }, 'إنشاء النموذج'))
           : h('p', { class: 'faint' }, 'لم ينشئ القسم هذا النموذج بعد.')));
       return;
     }
@@ -292,7 +296,7 @@ export async function renderForms() {
     const progEl = schema.progress ? h('b') : null;
     const impEl = h('b');
     const header = h('section', null,
-      h('div', { class: 'crumbs' }, `المتطلب ${f.requirement_code}: ${f.requirement_text ?? ''}`),
+      h('div', { class: 'crumbs' }, reqLabel(f)),
       h('h2', null, f.title_ar),
       h('div', { class: 'row' }, h('span', { class: `status ${STATUS_CLASS[f.status]}` }, STATUS[f.status]),
         h('span', { class: 'faint' }, `${KIND[f.kind]} · المرجع AQAP-F-${f.id}`), statusEl),

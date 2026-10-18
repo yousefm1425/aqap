@@ -71,9 +71,11 @@ async def _templates(conn: AsyncConnection, cycle: dict) -> list[dict]:
              JOIN framework f ON f.code = t.framework_code
              LEFT JOIN requirement r ON r.code = t.requirement_code AND r.sub_standard_id IN (
                   SELECT ss2.id FROM sub_standard ss2 JOIN standard s2 ON s2.id = ss2.standard_id WHERE s2.framework_id = f.id)
-             LEFT JOIN sub_standard ss ON ss.id = r.sub_standard_id
+             LEFT JOIN sub_standard ss ON ss.id = COALESCE(r.sub_standard_id, (      -- نموذج مرتبط بمعيار فرعي (رمز «3-1/...»)
+                  SELECT ss3.id FROM sub_standard ss3 JOIN standard s3 ON s3.id = ss3.standard_id
+                   WHERE s3.framework_id = f.id AND ss3.code = split_part(t.requirement_code, '/', 1)))
              LEFT JOIN standard s ON s.id = ss.standard_id
-            WHERE f.id = %s ORDER BY t.sort_order""", (cycle["framework_id"],))
+            WHERE f.id = %s ORDER BY t.sort_order, t.id""", (cycle["framework_id"],))
     return await cur.fetchall()
 
 

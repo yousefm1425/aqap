@@ -309,6 +309,8 @@ def eval_summary(expr: dict, rows: list[dict], tables: dict | None = None) -> An
         vals = [n for n in (_num(r.get(expr["col"])) for r in rows) if n is not None]
         return sum(vals) if vals else None
     if op == "ratio_sums":
+        if expr.get("where"):
+            rows = [r for r in rows if r.get(expr["where"]) in expr["in"]]
         nums = [n for n in (_num(r.get(expr["num"])) for r in rows) if n is not None]
         d = sum(n for n in (_num(r.get(expr["den"])) for r in rows) if n is not None)
         return None if not nums or not d else sum(nums) / d
