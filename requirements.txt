@@ -6,6 +6,7 @@ python-multipart>=0.0.9
 PyJWT[crypto]>=2.8
 minio>=7.2
 pyxlsb>=1.0.10
+openpyxl>=3.1
 # للاختبارات
 pytest>=8
 httpx>=0.27

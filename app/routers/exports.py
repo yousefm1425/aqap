@@ -9,7 +9,6 @@ from psycopg import AsyncConnection
 from starlette.concurrency import run_in_threadpool
 
 from ..config import settings
-from ..export_basic import build_basic
 from ..export_official import ExportError, build_payload, run_filler
 from ..security import CurrentUser, current_user, forbid, get_conn, load_cycle
 
@@ -31,6 +30,7 @@ async def export_official(cycle_id: int, background: BackgroundTasks, user: Curr
             payload = await build_payload(conn, cycle_id)
             report = await run_in_threadpool(run_filler, payload, settings.official_template, str(out))
         else:   # لا يوجد ملف القالب الرسمي على الخادم: ملف Excel منسّق بديل بالبيانات نفسها
+            from ..export_basic import build_basic   # تحميل عند الطلب فقط
             report = await build_basic(conn, cycle_id, str(out))
     except ExportError as exc:
         raise HTTPException(422, str(exc))

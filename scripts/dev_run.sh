@@ -2,6 +2,8 @@
 # تشغيل المنصة في الخلفية على المنفذ 8000 (Codespaces يفتحه تلقائياً)
 # setsid يفصل الخادم عن جلسة أمر التشغيل حتى لا يُغلق عند انتهائها
 cd "$(dirname "$0")/.."
+# تثبيت أي مكتبة أُضيفت للمتطلبات بعد آخر تحديث (git pull)
+pip install -q -r requirements.txt 2>&1 | grep -v "already satisfied" | tail -3 || true
 pkill -f "uvicorn app.main:app" 2>/dev/null || true
 setsid nohup uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers > /tmp/aqap.log 2>&1 < /dev/null &
 for _ in $(seq 1 20); do
