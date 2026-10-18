@@ -163,7 +163,11 @@ def test_improvement_plan_module(client, auth):
 def test_export_endpoint_guards(client, auth):
     assert client.get(f"{API}/cycles/1/export/official", headers=auth(COORD)).status_code == 403
     r = client.get(f"{API}/cycles/1/export/official", headers=auth(DEAN))
-    assert r.status_code == 503 and "AQAP_OFFICIAL_TEMPLATE" in r.json()["detail"]
+    assert r.status_code == 200 and r.content[:2] == b"PK"      # بلا قالب رسمي: ملف Excel بديل
+    from io import BytesIO
+    from openpyxl import load_workbook
+    wb = load_workbook(BytesIO(r.content))
+    assert wb.sheetnames == ["ملخص الأقسام", "الاستيفاء حسب المعيار", "التقديرات التفصيلية", "خطط التحسين"]
 
 
 def test_close_cycle_guarded(client, auth):

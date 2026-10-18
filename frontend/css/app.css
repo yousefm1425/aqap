@@ -160,7 +160,10 @@ input[type=range] { accent-color: var(--primary); flex: 1; }
 .matrix-wrap { overflow-x: auto; }
 .matrix { display: grid; gap: 3px; align-items: center; }
 .matrix .rowlabel { font-size: .85rem; padding-inline-end: .75rem; white-space: nowrap; }
-.matrix .stdlabel { font-size: .75rem; color: var(--ink-3); border-top: 2px solid var(--ink-3); padding-top: .2rem; white-space: nowrap; overflow: hidden; }
+.matrix .stdlabel { font-size: .72rem; line-height: 1.3; font-weight: 600; color: var(--ink-2); border-top: 2px solid var(--ink-3); padding: .25rem .15rem 0; overflow: hidden; text-align: center; align-self: end; }
+.gap-item { display: flex; flex-direction: column; gap: .15rem; min-width: 0; }
+.gap-item a { line-height: 1.5; }
+.gap-verdict { white-space: nowrap; }
 .cell { width: 100%; aspect-ratio: 1; min-width: 14px; border: 0; border-radius: 2px; background: var(--c); cursor: pointer; padding: 0; }
 .cell.r-none { background: repeating-linear-gradient(45deg, #fff 0 3px, #E3E8E6 3px 5px); box-shadow: inset 0 0 0 1px var(--line); }
 .cell.gap-mark { box-shadow: inset 0 0 0 2px var(--ink); }

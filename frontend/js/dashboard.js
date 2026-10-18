@@ -70,7 +70,8 @@ function matrix(assessments, gapIds) {
     const code = columns[i].standard_code;
     let span = 0;
     while (i + span < columns.length && columns[i + span].standard_code === code) span += 1;
-    grid.append(h('span', { class: 'stdlabel', style: { gridColumn: `span ${span}` }, title: code }, code));
+    const name = columns[i].standard_title || code;
+    grid.append(h('span', { class: 'stdlabel', style: { gridColumn: `span ${span}` }, title: name }, name));
     i += span;
   }
   for (const d of depts) {
@@ -174,17 +175,21 @@ export async function renderDashboard() {
     h('section', { class: 'panel' }, h('header', null, h('h2', null, 'مجال التحسين: أضعف خمسة معايير فرعية')), rankList(rank.worst, 'لا توجد تقديرات كافية بعد.')));
 
   const over = gaps;
+  const byId = new Map(all.map(a => [a.id, a]));
   const followUp = h('div', { class: 'cols2' },
     h('section', { class: 'panel' },
       h('header', null, h('h2', null, 'أحكام بعدم الانطباق'), h('span', { class: 'faint' }, `${num(over.length)} تقييم ذاتي لم يؤكده المقيّم`)),
       over.length ? h('ul', { class: 'rank' }, over.slice(0, 8).map(g => h('li', null,
-        h('a', { href: `#/workspace?dept=${g.department_id ?? 'inst'}&a=${g.assessment_id}` }, `${deptName(g.department_id)} · ${g.requirement_code}`),
-        h('span', { class: 'faint' }, `${RATING[g.self_rating]} — ${VERDICT[g.ext_verdict]}`))))
+        h('div', { class: 'gap-item' },
+          h('a', { href: `#/workspace?dept=${g.department_id ?? 'inst'}&a=${g.assessment_id}` },
+            byId.get(g.assessment_id)?.requirement_text ?? g.requirement_code),
+          h('span', { class: 'faint' }, `${deptName(g.department_id)} · ${byId.get(g.assessment_id)?.sub_standard_title ?? ''}`)),
+        h('span', { class: 'faint gap-verdict' }, `${RATING[g.self_rating]} — ${VERDICT[g.ext_verdict]}`))))
         : h('p', { class: 'muted' }, 'لا توجد فجوات حتى الآن.')),
     h('section', { class: 'panel' },
       h('header', null, h('h2', null, 'إجراءات تحسين متأخرة')),
       overdue.length ? h('ul', { class: 'rank' }, overdue.map(a => h('li', null,
-        h('a', { href: `#/plans?dept=${a.department_id ?? 'inst'}&a=${a.id}` }, a.requirement_code ?? a.title_ar,
+        h('a', { href: `#/plans?dept=${a.department_id ?? 'inst'}&a=${a.id}` }, a.requirement_text ?? a.title_ar ?? a.requirement_code,
           h('span', { class: 'faint' }, ` · ${a.owner_name ?? a.owner_label ?? 'بلا مسؤول'} · ${deptName(a.department_id)}`)),
         h('strong', { style: { color: 'var(--not-met)' } }, `${num(a.days_overdue)} يوم`))))
         : h('p', { class: 'muted' }, 'كل الإجراءات ضمن مواعيدها.')));

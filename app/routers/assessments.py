@@ -11,7 +11,7 @@ SELECT a.id, a.cycle_id, a.department_id, a.status, a.due_date, a.assigned_to,
        a.self_rating, a.ext_verdict,
        effective_rating(a.self_rating, a.ext_verdict, na_allowed(a.requirement_id, a.department_id)) AS eff_rating,
        na_allowed(a.requirement_id, a.department_id) AS na_ok,
-       s.code AS standard_code, ss.code AS sub_standard_code, ss.title_ar AS sub_standard_title,
+       s.code AS standard_code, s.title_ar AS standard_title, ss.code AS sub_standard_code, ss.title_ar AS sub_standard_title,
        r.id AS requirement_id, r.code AS requirement_code, r.text_ar AS requirement_text, r.evidence_required,
        (SELECT count(*) FROM assessment_evidence ae WHERE ae.assessment_id = a.id) AS evidence_count,
        (SELECT ad.due_on FROM v_assessment_deadline ad WHERE ad.assessment_id = a.id) AS deadline
