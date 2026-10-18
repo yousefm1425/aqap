@@ -24,14 +24,13 @@ function gauge(value) {
   const pt = (p, rad = r) => { const a = Math.PI * (1 - p / 100); return [cx + rad * Math.cos(a), cy - rad * Math.sin(a)]; };
   const arc = (a, b) => { const [x1, y1] = pt(a), [x2, y2] = pt(b); return `M${x1} ${y1} A${r} ${r} 0 0 1 ${x2} ${y2}`; };
   const v = value == null ? 0 : Math.max(0, Math.min(100, Number(value)));
-  const [nx, ny] = pt(v, r - 22);
   return s('svg', { viewBox: '0 0 200 115', class: 'gauge', role: 'img', 'aria-label': `النسبة ${pct(value)}` },
     s('path', { d: arc(0, 50), class: 'z-bad', 'stroke-width': w, fill: 'none' }),
     s('path', { d: arc(50, PASS), class: 'z-mid', 'stroke-width': w, fill: 'none' }),
     s('path', { d: arc(PASS, 100), class: 'z-good', 'stroke-width': w, fill: 'none' }),
-    v > 0.5 && s('path', { d: arc(0, v), class: `z-val t-${tone(value)}`, 'stroke-width': w - 12, fill: 'none', 'stroke-linecap': 'round' }),
+    v > 0.5 && s('path', { d: arc(0, v), class: `z-val t-${tone(value)}`, 'stroke-width': w - 12, fill: 'none', 'stroke-linecap': 'round', pathLength: 100 }),
     s('text', { x: 18, y: 113, class: 'gl' }, '0'), s('text', { x: 182, y: 113, class: 'gl' }, '100'),
-    value != null && s('line', { x1: cx, y1: cy, x2: nx, y2: ny, class: 'needle' }),
+    value != null && s('line', { x1: cx, y1: cy, x2: cx - (r - 22), y2: cy, class: 'needle', style: `--a:${v * 1.8}deg` }),
     s('circle', { cx, cy, r: 6, class: 'hub' }));
 }
 
@@ -41,7 +40,35 @@ function ring(value, size = 92) {
     s('svg', { viewBox: '0 0 100 100', 'aria-hidden': 'true' },
       s('circle', { cx: 50, cy: 50, r, class: 'track' }),
       s('circle', { cx: 50, cy: 50, r, class: 'val', 'stroke-dasharray': `${(c * v) / 100} ${c}`, transform: 'rotate(-90 50 50)' })),
-    h('b', null, pct(value == null ? null : Math.round(Number(value)))));
+    h('b', { 'data-v': value == null ? '' : Math.round(Number(value)) }, pct(value == null ? null : Math.round(Number(value)))));
+}
+
+// حركة المؤشرات: تمتلئ العدادات والحلقات من الصفر وتعدّ الأرقام، وتتكرر كل 5 ثوانٍ
+const PERIOD = 5000;
+function countUp(el, to, ms = 1200) {
+  const t0 = performance.now();
+  const step = t => { const k = Math.min(1, (t - t0) / ms), e = 1 - (1 - k) ** 3;
+    el.textContent = pct(Math.round(to * e)); if (k < 1) requestAnimationFrame(step); };
+  requestAnimationFrame(step);
+}
+function replay(section, stagger) {
+  const items = [...section.querySelectorAll('.anim-item')];
+  items.forEach(x => x.classList.remove('play'));
+  void section.offsetWidth;                       // إعادة تشغيل حركة CSS
+  items.forEach((x, i) => setTimeout(() => {
+    x.classList.add('play');
+    const n = x.querySelector('[data-v]');
+    if (n && n.dataset.v !== '') countUp(n, Number(n.dataset.v));
+  }, i * stagger));
+}
+function animateEvery(root, sections) {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const run = () => sections.forEach(([sec, stagger]) => replay(sec, stagger));
+  requestAnimationFrame(run);
+  const id = setInterval(() => {
+    if (!root.isConnected) { clearInterval(id); return; }   // غادر المستخدم الصفحة
+    if (!document.hidden) run();
+  }, PERIOD);
 }
 
 function countsTable(title, rows, keyOf, labelOf, depts, subs) {
@@ -147,12 +174,12 @@ export async function renderReport() {
 
   const gauges = h('section', { class: 'gauges' }, stdCodes.map(([code, title], i) => {
     const v = stdVal(code);
-    return h('article', { class: `gcard t-${tone(v)}` }, h('h3', null, title), gauge(v),
-      h('strong', null, pct(v == null ? null : Math.round(v))), h('span', { class: 'tag' }, `المعيار ${ORDINAL[i] ?? code}`));
+    return h('article', { class: `gcard anim-item t-${tone(v)}` }, h('h3', null, title), gauge(v),
+      h('strong', { 'data-v': v == null ? '' : Math.round(v) }, pct(v == null ? null : Math.round(v))), h('span', { class: 'tag' }, `المعيار ${ORDINAL[i] ?? code}`));
   }));
 
   const rings = h('section', { class: 'card rings' }, subList.map(x =>
-    h('div', { class: 'ringcell', title: x.sub_standard_title },
+    h('div', { class: 'ringcell anim-item', title: x.sub_standard_title },
       h('small', null, h('bdi', { class: 'ssub-code' }, x.sub_standard_code), h('br'), x.sub_standard_title), ring(subVal(x.sub_standard_code)))));
 
   const rankList = (items, cls, label) => h('div', { class: `rankbox ${cls}` }, h('h3', null, label),
@@ -182,10 +209,12 @@ export async function renderReport() {
     myPlans.length ? planGroups(myPlans, scopeKey)
       : h('p', { class: 'empty' }, 'لا توجد متطلبات عليها ملاحظات في هذا النطاق.'));
 
-  return h('div', { class: 'final-report' }, head,
+  const page = h('div', { class: 'final-report' }, head,
     title('١', 'المعايير الرئيسية', 'حد الاجتياز 89.5% — الأخضر مجتاز، والوردي يحتاج تحسيناً، والأحمر أقل من 50%'), gauges,
     title('٢', 'المعايير الفرعية'), rings,
     title('٣', 'مجالات القوة والتحسين'), summary,
     title('٤', 'أعداد المتطلبات حسب نتيجة التقييم'), tables,
     title('٥', 'المتطلبات التي تتطلب خطة تحسينية'), plansSec);
+  animateEvery(page, [[gauges, 120], [rings, 45]]);
+  return page;
 }

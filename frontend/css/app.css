@@ -322,7 +322,17 @@ select.fu-done { background: #EAF5EE; } select.fu-partial { background: var(--wa
 .gauge .z-bad { stroke: var(--not-met); opacity: .18; } .gauge .z-mid { stroke: var(--partial); opacity: .22; }
 .gauge .z-good { stroke: var(--met); opacity: .3; }
 .gauge .z-val.t-good { stroke: var(--met); } .gauge .z-val.t-mid { stroke: var(--partial); } .gauge .z-val.t-bad { stroke: var(--not-met); }
-.gauge .needle { stroke: var(--ink); stroke-width: 3.5; stroke-linecap: round; } .gauge .hub { fill: var(--ink); }
+.gauge .needle { stroke: var(--ink); stroke-width: 3.5; stroke-linecap: round; transform-box: view-box; transform-origin: 100px 100px; transform: rotate(var(--a)); }
+.anim-item.play .gauge .needle { animation: needle-sweep 1.3s cubic-bezier(.3, 1.35, .5, 1) both; }
+.anim-item.play .gauge .z-val { stroke-dasharray: 100 100; animation: arc-draw 1.2s ease-out both; }
+.anim-item.play .ring .val { animation: ring-fill 1.2s ease-out both; }
+.anim-item.play .ring { animation: ring-pop .5s ease-out; }
+@keyframes needle-sweep { from { transform: rotate(0deg); } to { transform: rotate(var(--a)); } }
+@keyframes arc-draw { from { stroke-dashoffset: 100; } to { stroke-dashoffset: 0; } }
+@keyframes ring-fill { from { stroke-dasharray: 0 252; } }
+@keyframes ring-pop { 50% { transform: scale(1.06); } }
+@media (prefers-reduced-motion: reduce) { .anim-item.play * { animation: none !important; } }
+@media print { .anim-item.play * { animation: none !important; } } .gauge .hub { fill: var(--ink); }
 .gauge .gl { font-size: 9px; fill: var(--ink-2); text-anchor: middle; }
 
 /* دوائر المعايير الفرعية */
