@@ -376,3 +376,31 @@ def test_training_patterns_optional(client, auth):
     assert client.delete(f"{API}/external-visits/{v.json()['id']}", headers=auth(COORD)).status_code == 403
     assert client.post(f"{base}/revoke", headers=auth(DEAN), json={"reason_ar": "إيقاف النمط"}).json()["active"] is False
     assert client.post(f"{base}/activate", headers=auth(DEAN), json=body).json()["patterns_cycle_id"] == pc   # نفس الدورة بلا فقد
+
+
+def test_attendance_so09(client, auth):
+    """تقرير التحضير SO09: رفع أسبوعي، ربط المدربين بالأقسام، المؤشرات، وصلاحيات القسم."""
+    row = lambda no, name, course, reg, p, a, ui=0, ua=0, slots=None: {
+        "trainer_no": no, "trainer_name": name, "section_ref": f"5{no}", "course_name": course, "schedule_type": "نظري صباحي",
+        "total": reg, "registered": reg, "deprived": 0, "withdrawn": 0, "slots": slots or (p + a + ui + ua), "present": p, "absent": a,
+        "unlisted_active": ua, "unlisted_inactive": ui,
+        "recording_pct": round((p + a) / ((slots or (p + a + ui + ua)) - ui) * 100, 2)}
+    rows = [row("001", "مدرب الشبكات", "مبادئ شبكات الحاسب", 20, 18, 2),
+            row("002", "مدرب اللغة", "لغة إنجليزية -1", 30, 20, 4, ua=6),
+            row("003", "مدرب غير معروف", "مقدمة تطبيقات الحاسب", 10, 0, 0, slots=10)]
+    body = {"week_no": 7, "period_from": "2026-10-11", "period_to": "2026-10-15", "file_name": "so09.csv", "rows": rows}
+    assert client.post(f"{API}/cycles/1/attendance", headers=auth(COORD), json=body).status_code == 403
+    r = client.post(f"{API}/cycles/1/attendance", headers=auth(DEAN), json=body).json()
+    assert r["rows"] == 3 and r["new_trainers"] == 3
+    tr = {t["trainer_no"]: t for t in client.get(f"{API}/attendance/trainers", headers=auth(DEAN)).json()}
+    assert tr["003"]["department_id"] is None and not tr["001"]["confirmed"]       # المقرر المشترك لا يُقترح له قسم
+    s = client.get(f"{API}/cycles/1/attendance", headers=auth(DEAN)).json()
+    assert s["college"]["sections"] == 3 and round(s["college"]["attendance"], 3) == round(38 / 44, 3)
+    assert s["college"]["incomplete"] == 2 and s["college"]["not_recorded"] == 1 and s["trainers_unconfirmed"] == 3
+    assert client.put(f"{API}/attendance/trainers", headers=auth(DEAN),
+                      json={"items": [{"trainer_no": "001", "department_id": 1}, {"trainer_no": "003", "department_id": 2}]}).json()["updated"] == 2
+    mine = client.get(f"{API}/cycles/1/attendance", headers=auth(COORD)).json()          # منسق الحاسب يرى قسمه فقط
+    assert mine["college"]["sections"] == 1 and mine["follow_up_total"] == 0
+    assert client.post(f"{API}/cycles/1/attendance", headers=auth(DEAN), json={**body, "rows": rows[:1]}).json()["rows"] == 1   # إعادة رفع الأسبوع تستبدله
+    assert len(client.get(f"{API}/cycles/1/attendance", headers=auth(DEAN)).json()["uploads"]) == 1
+    assert client.delete(f"{API}/cycles/1/attendance/7", headers=auth(DEAN)).json()["deleted"]

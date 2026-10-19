@@ -599,3 +599,23 @@ dialog:has(.qw-form) { width: min(40rem, 94vw); }
 .topbar nav a[aria-current="page"] { opacity: 1; font-weight: 700; background: rgba(255,255,255,.2);
   box-shadow: 0 0 0 1px rgba(255,255,255,.28), 0 0 18px rgba(120, 240, 200, .45), inset 0 -2px 0 #F2C94C; }
 .topbar nav a:active { transform: scale(.97); }
+
+/* سير العملية التدريبية */
+.tr-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .7rem; margin: 1rem 0 .6rem; }
+.tr-kpi { background: #fff; border: 1px solid #E3EDE9; border-top: 4px solid #B9CBC6; border-radius: 12px; padding: .7rem .9rem; display: flex; flex-direction: column; }
+.tr-kpi small { color: var(--ink-2); font-size: .78rem; } .tr-kpi b { font-size: 1.6rem; line-height: 1.25; } .tr-kpi span { font-size: .74rem; color: var(--ink-2); }
+.tr-kpi.att { border-top-color: #009C8C; } .tr-kpi.rec { border-top-color: #B7791F; }
+.tr-kpi.bad { border-top-color: #C2463D; } .tr-kpi.bad b { color: #C2463D; } .tr-kpi.warn { border-top-color: #B7791F; } .tr-kpi.warn b { color: #9A6A0E; }
+.tr-thr { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; font-size: .85rem; margin-bottom: 1rem; }
+.tr-thr input { width: 4.2rem; padding: .2rem .4rem; border: 1px solid var(--line); border-radius: 6px; }
+.tr-thr .btn:first-of-type { margin-inline-start: auto; }
+.tr-chart { width: 100%; height: auto; }
+.tr-chart .grid { stroke: #E8EFED; } .tr-chart .target { stroke: #C2463D; stroke-width: 1.5; stroke-dasharray: 5 4; }
+.tr-chart .tick { font-size: 11px; fill: #7A8A88; } .tr-chart .lbl { font-size: 12px; fill: #2E3B3A; font-weight: 600; }
+.tr-chart .val { font-size: 11px; fill: #3B4544; } .tr-chart rect:hover, .tr-chart circle:hover { opacity: .8; }
+.tr-legend { margin: 0 0 .4rem; } .tr-legend .cell { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.tr-bad { color: #C2463D; font-weight: 700; }
+.tr-follow { max-height: 420px; overflow: auto; }
+.tr-mini { display: flex; gap: .6rem; flex-wrap: wrap; } .tr-mini span { background: #F3F8F6; border-radius: 8px; padding: .3rem .6rem; font-size: .85rem; }
+dialog:has(.tr-wide) { width: min(56rem, 96vw); }
+.tr-map { max-height: 55vh; overflow: auto; } .tr-map tr.pending td { background: #FFFBF0; } .tr-map td small { margin-inline-start: .4rem; }
