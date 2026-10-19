@@ -249,7 +249,7 @@ function insights(d, tAtt, tRec) {
   return out;
 }
 
-function printReport(d, tAtt, tRec) {
+function printReport(d, tAtt, tRec, e) {
   const c = d.college, wk = d.week;
   const recs = [];
   if (c.incomplete) recs.push('متابعة المدربين الذين لم يكتمل رصد التحضير في شعبهم وإكماله قبل نهاية الأسبوع التالي.');
@@ -262,6 +262,11 @@ function printReport(d, tAtt, tRec) {
     <td>${num(x.incomplete)}</td><td>${num(x.deprived)}</td><td>${num(x.withdrawn)}</td></tr>`).join('');
   const fu = d.follow_up.slice(0, 30).map((x, i) => `<tr><td>${i + 1}</td><td>${x.department}</td><td>${x.trainer ?? ''}</td><td>${(x.course ?? '').trim()}</td>
     <td>${x.section ?? ''}</td><td class="bad">${P(x.recording / 100)}</td></tr>`).join('');
+  const enr = e?.latest ? `<div style="break-inside:avoid"><h2>المتدربون المستمرون والبرامج (ST06${e.latest.term_label ? ` — ${e.latest.term_label}` : ''})</h2>
+    <p class="sub" style="margin:0 0 4px">إجمالي المتدربين المستمرين ${num(e.total)} في ${num(e.programs)} برنامج${e.same_snapshot ? '' : ` · بداية الفصل ${num(e.baseline_total)} (الاستمرار ${P(e.baseline_total ? e.total / e.baseline_total : null)})`}</p>
+    <table><tr><th>القسم</th><th>البرامج</th><th>المتدربون</th>${e.same_snapshot ? '' : '<th>بداية الفصل</th>'}<th>المدربون</th><th>متدرب لكل مدرب</th></tr>
+    ${e.by_department.map(x => `<tr><td>${x.name}</td><td>${x.programs.map(p => p.program.replace(/\s*-\s*تطبيقي$/, '').replace(/-تطبيقي$/, '') + (p.shift && p.shift !== 'صباحي' ? ` (${p.shift})` : '')).join('، ')}</td>
+      <td>${num(x.trainees)}</td>${e.same_snapshot ? '' : `<td>${num(x.baseline)}</td>`}<td>${x.trainers ? num(x.trainers) : '—'}</td><td>${x.per_trainer ?? '—'}</td></tr>`).join('')}</table></div>` : '';
   const chart1 = groupedBars(d.by_department, tAtt).outerHTML, chart2 = d.trend.length > 1 ? trendLine(d.trend).outerHTML : '';
   const html = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>التقرير التنفيذي — سير العملية التدريبية</title>
   <style>
@@ -288,7 +293,7 @@ function printReport(d, tAtt, tRec) {
     .ft { margin-top: 18px; font-size: 8.5pt; color: #8a9291; border-top: 1px solid #e3ecea; padding-top: 6px; display: flex; justify-content: space-between; }
   </style></head><body>
   <div class="hd"><div><img src="${location.origin}/app/img/tvtc-logo.png" alt=""><div class="college">الكلية التقنية التطبيقية بينبع</div></div>
-    <div class="t">وكالة الجودة<br><span style="font-weight:400;color:#66706f;font-size:9pt">تقرير SO09 — رايات</span></div></div>
+    <div class="t">وكالة الجودة<br><span style="font-weight:400;color:#66706f;font-size:9pt">تقريرا SO09 و ST06 — رايات</span></div></div>
   <h1>التقرير التنفيذي لسير العملية التدريبية</h1>
   <p class="sub">الأسبوع التدريبي ${wk.week_no}${wk.period_from ? ` · من ${date(wk.period_from)} إلى ${date(wk.period_to)}` : ''}</p>
   <div class="kpis">${kpi('نسبة الحضور الفعلية', P(c.attendance))}${kpi('نسبة رصد التحضير', P(c.recording), 'r')}${kpi('الشعب', num(c.sections))}
@@ -298,6 +303,7 @@ function printReport(d, tAtt, tRec) {
   <div class="legend"><i style="background:${ATT}"></i>الحضور<i style="background:${REC}"></i>رصد التحضير<i style="background:#C2463D;height:2px"></i>المستهدف ${P(tAtt)}</div>${chart1}
   ${chart2 ? `<h2>اتجاه الأسابيع</h2>${chart2}` : ''}
   <h2>ملخص الأقسام</h2><table><tr><th>القسم</th><th>الشعب</th><th>المدربون</th><th>المسجلون</th><th>الحضور</th><th>رصد التحضير</th><th>رصد ناقص</th><th>المحرومون</th><th>المنسحبون</th></tr>${deptRows}</table>
+  ${enr}
   <h2>التوصيات</h2><ul>${recs.map(x => `<li>${x}</li>`).join('')}</ul>
   ${fu ? `<h2>شعب تحتاج متابعة رصد التحضير (أدنى 30)</h2><table><tr><th>#</th><th>القسم</th><th>المدرب</th><th>المقرر</th><th>الشعبة</th><th>الرصد</th></tr>${fu}</table>` : ''}
   <div class="sign"><div>رئيس القسم</div><div>وكيل الجودة</div></div>
@@ -308,20 +314,143 @@ function printReport(d, tAtt, tRec) {
   w.document.write(html); w.document.close();
 }
 
+// ------------------------------------------------------------------ ST06: المتدربون المستمرون والبرامج
+const COLS06 = { 'الفصل التدريبي': 'term', 'القسم': 'dept_name', 'البرنامج': 'program', 'المرحلة': 'stage', 'نوع التدريب': 'shift', 'عدد المتدربين': 'trainees' };
+
+function readST06(text) {
+  const rows = parseCSV(text.replace(/^﻿/, ''));
+  const head = rows[0].map(x => x.trim());
+  const need = ['القسم', 'البرنامج', 'عدد المتدربين'];
+  const missing = need.filter(k => !head.includes(k));
+  if (missing.length) throw new Error(`الملف ليس تقرير ST06؛ أعمدة ناقصة: ${missing.join('، ')}`);
+  return rows.slice(1).map(r => {
+    const o = {};
+    head.forEach((k, i) => { if (COLS06[k]) o[COLS06[k]] = (r[i] ?? '').trim(); });
+    o.trainees = Number(o.trainees) || 0;
+    return o;
+  }).filter(o => o.dept_name && o.program);
+}
+
+function programBars(depts) {                   // شريط لكل برنامج، مجمّعة حسب القسم (سلسلة واحدة)
+  const items = depts.flatMap(d => d.programs.map(p => ({ dept: d.name, label: `${p.program.replace(/\s*-\s*تطبيقي$/, '').replace(/-تطبيقي$/, '')}${p.shift && p.shift !== 'صباحي' ? ` (${p.shift})` : ''}`, v: p.trainees })));
+  const L = 250, R = 60, row = 26, gap = 14, W = 760;
+  const H = items.length * row + (depts.length - 1) * gap + 10, max = Math.max(1, ...items.map(i => i.v));
+  const g = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'tr-chart', direction: 'rtl', role: 'img', 'aria-label': 'المتدربون المستمرون حسب البرنامج' });
+  let y = 4, prev = null;
+  items.forEach(it => {
+    if (prev !== null && it.dept !== prev) y += gap;
+    if (it.dept !== prev) g.append(s('line', { x1: R, x2: W - 4, y1: y - gap / 2, y2: y - gap / 2, class: 'grid' }));
+    prev = it.dept;
+    const w = (W - L - R) * (it.v / max);
+    g.append(s('text', { x: W - 4, y: y + row / 2 + 4, class: 'lbl', 'text-anchor': 'start' }, it.label),
+      s('rect', { x: W - L - w, y: y + 4, width: Math.max(2, w), height: row - 9, rx: 4, fill: ATT }, s('title', null, `${it.dept} — ${it.label}: ${num(it.v)} متدرب`)),
+      s('text', { x: W - L - w - 6, y: y + row / 2 + 4, class: 'val', 'text-anchor': 'start' }, num(it.v)));
+    y += row;
+  });
+  return g;
+}
+
+function uploadST06(cycle, e, reload) {
+  const inp = h('input', { type: 'file', accept: '.csv', hidden: true, onchange: async ev => {
+    const f = ev.target.files[0]; if (!f) return;
+    let rows;
+    try { rows = readST06(await f.text()); } catch (ex) { toast(ex.message, 'error'); return; }
+    const term = rows.find(r => r.term)?.term ?? '';
+    const total = rows.reduce((a, r) => a + r.trainees, 0);
+    const asBase = h('input', { type: 'checkbox' });
+    dialog('رفع تقرير ST06 — المتدربون المستمرون', [
+      h('p', null, `${f.name}: ${num(rows.length)} برنامج/فترة، ${num(total)} متدرب${term ? ` — ${term}` : ''}.`),
+      h('p', { class: 'qw-tip' }, e.baseline
+        ? 'سيحل هذا الملف محل «الأحدث» ويُقارَن بنسخة بداية الفصل المحفوظة. لا تُحفظ أي بيانات شخصية.'
+        : 'هذا أول رفع في الفصل؛ سيُحفظ «بداية الفصل» للمقارنة لاحقاً، وكل رفع بعده يحدّث «الأحدث» فقط.'),
+      e.baseline && h('label', { class: 'row' }, asBase, ' اعتبره أيضاً «بداية الفصل» (يستبدل نسخة المقارنة)')],
+    async () => {
+      const r = await api(`/cycles/${cycle.id}/enrollment`, { method: 'POST', body: { term_label: term || null, file_name: f.name,
+        as_baseline: asBase.checked, rows: rows.map(({ term: _t, ...x }) => x) } });
+      toast(`رُفع ST06: ${num(r.trainees)} متدرب${r.baseline ? ' (حُفظ كبداية الفصل)' : ''}`);
+      if (r.unmatched.length) setTimeout(() => addDeptsDialog(r.unmatched, reload), 300); else reload();
+    }, 'رفع');
+    inp.value = '';
+  } });
+  document.body.append(inp);
+  inp.click();
+}
+
+function addDeptsDialog(names, reload) {
+  const checks = names.map(() => h('input', { type: 'checkbox', checked: true }));
+  dialog('أقسام في ST06 غير موجودة في المنصة', [
+    h('p', { class: 'qw-tip' }, 'هذه الأقسام وردت في تقرير رايات ولا يقابلها قسم في المنصة. أضِفها لتظهر أعدادها وتُربط بمدربيها.'),
+    h('ul', { class: 'rank' }, names.map((n, i) => h('li', null, h('label', { class: 'row' }, checks[i], ` ${n}`))))],
+  async () => {
+    for (const [i, n] of names.entries()) {
+      if (!checks[i].checked) continue;
+      const r = await api('/attendance/departments', { method: 'POST', body: { name_ar: n } });
+      if (!r.existing) state.departments.push({ id: r.id, name_ar: r.name_ar });
+    }
+    toast('أُضيفت الأقسام؛ اربط مدربيها من «ربط المدربين بالأقسام»');
+  }, 'إضافة المحدد');
+  document.getElementById('dialog').addEventListener('close', reload, { once: true });
+}
+
+function enrollmentSection(e, d, cycle, reload) {
+  const head = h('header', null, h('h2', null, 'المتدربون المستمرون والبرامج (ST06)'),
+    e.latest && h('span', { class: 'faint' }, `${e.latest.term_label ?? ''} · آخر رفع ${date(e.latest.uploaded_at)}`));
+  if (!e.latest) {
+    return h('section', { class: 'panel' }, head, h('p', { class: 'muted' }, e.can_edit
+      ? 'ارفع تقرير ST06 من رايات (CSV) مرة في بداية الفصل، ثم كلما تحدّث. يُستخدم مصدراً لعدد متدربي كل قسم ولنسبة المتدربين لكل مدرب والاستمرار خلال الفصل.'
+      : 'تظهر هنا أعداد المتدربين المستمرين لكل برنامج بعد أن ترفع وكالة الجودة تقرير ST06.'));
+  }
+  const kpi = (label, value, cls, sub) => h('div', { class: `tr-kpi ${cls ?? ''}` }, h('small', null, label), h('b', null, value), sub && h('span', null, sub));
+  const change = e.total - e.baseline_total;
+  const coursesPer = d?.college && e.total ? d.college.registered / e.total : null;
+  const shifts = Object.entries(e.by_shift).map(([k, v]) => `${k} ${num(v)}`).join(' · ');
+  const kpis = h('section', { class: 'tr-kpis' },
+    kpi('المتدربون المستمرون', num(e.total), 'att', shifts),
+    kpi('البرامج', num(e.programs), '', `في ${num(e.departments)} أقسام`),
+    !e.same_snapshot && kpi('التغير منذ بداية الفصل', `${change > 0 ? '+' : ''}${num(change)}`, change < 0 ? 'bad' : '',
+      `الاستمرار ${P(e.baseline_total ? e.total / e.baseline_total : null)}`),
+    coursesPer && kpi('متوسط المقررات لكل متدرب', coursesPer.toFixed(1), '', 'تسجيلات SO09 ÷ متدربو ST06'));
+  const diff = e.by_department.filter(x => x.department_id && x.platform_count !== x.trainees);
+  const tools = e.can_edit && h('div', { class: 'tr-thr' },
+    h('button', { class: 'btn small', onclick: () => uploadST06(cycle, e, reload) }, 'تحديث ST06'),
+    diff.length > 0 && h('button', { class: 'btn primary small', onclick: async () => {
+      const r = await api(`/cycles/${cycle.id}/enrollment/apply-counts`, { method: 'POST' });
+      toast(`اعتُمد عدد المتدربين من ST06 لـ: ${r.updated.join('، ')}`); reload();
+    } }, `اعتماد أعداد المتدربين في المنصة (${num(diff.length)} قسم مختلف)`),
+    e.unmatched.length > 0 && h('button', { class: 'btn small', onclick: () => addDeptsDialog(e.unmatched, reload) },
+      `${num(e.unmatched.length)} قسم غير موجود في المنصة`));
+  const table = h('div', { class: 'matrix-wrap' }, h('table', { class: 'data' },
+    h('thead', null, h('tr', null, ['القسم', 'البرامج', 'المتدربون', !e.same_snapshot && 'بداية الفصل', !e.same_snapshot && 'التغير', 'المدربون (SO09)', 'متدرب لكل مدرب', 'المسجل في المنصة']
+      .filter(Boolean).map(t => h('th', null, t)))),
+    h('tbody', null, e.by_department.map(x => h('tr', null,
+      h('td', null, x.name, !x.department_id && h('small', { class: 'chip c-mid' }, 'غير موجود')),
+      h('td', null, x.programs.map(p => p.program.replace(/\s*-\s*تطبيقي$/, '').replace(/-تطبيقي$/, '') + (p.shift && p.shift !== 'صباحي' ? ` (${p.shift})` : '')).join('، ')),
+      h('td', null, h('b', null, num(x.trainees))),
+      !e.same_snapshot && h('td', null, num(x.baseline)),
+      !e.same_snapshot && h('td', { class: x.trainees < x.baseline ? 'tr-bad' : '' }, `${x.trainees - x.baseline > 0 ? '+' : ''}${num(x.trainees - x.baseline)}`),
+      h('td', null, x.trainers ? num(x.trainers) : '—'), h('td', null, x.per_trainer ?? '—'),
+      h('td', { class: x.department_id && x.platform_count != null && x.platform_count !== x.trainees ? 'tr-bad' : 'faint' }, x.platform_count == null ? '—' : num(x.platform_count)))))));
+  return h('section', { class: 'panel tr-enr' }, head, kpis, tools,
+    table, h('h3', null, 'المتدربون حسب البرنامج'), h('div', { class: 'tr-prog' }, programBars(e.by_department)),
+    h('p', { class: 'qw-tip' }, '«المسجلون» في SO09 عدد تسجيلات المقررات (المتدرب يُحسب في كل مقرر)، أما ST06 فعدد المتدربين الفعلي — لذلك هو مصدر عدد المتدربين في المنصة. '
+      + 'قسم الدراسات العامة لا برامج له فلا يظهر هنا.'));
+}
+
 // ------------------------------------------------------------------ الصفحة
 export async function renderTraining() {
   const cycle = state.cycle;
   const { params } = parseRoute();
-  const d = await api(`/cycles/${cycle.id}/attendance${params.w ? `?week=${params.w}` : ''}`);
+  const [d, e] = await Promise.all([api(`/cycles/${cycle.id}/attendance${params.w ? `?week=${params.w}` : ''}`), api(`/cycles/${cycle.id}/enrollment`)]);
   const reload = () => go('training', { w: d.week?.week_no ?? '', t: Date.now() });
   let tAtt = getT('att', 0.9), tRec = getT('rec', 1);
 
   const hero = h('header', { class: 'scope-hero' },
     h('div', null, h('h1', null, 'سير العملية التدريبية'),
-      h('p', null, 'تقرير التحضير الأسبوعي SO09 من رايات يُقرأ داخل المتصفح ويتحول إلى مؤشرات حضور ورصد تحضير لكل قسم وشعبة، '
-        + 'ورسوم تفاعلية، وتقرير تنفيذي جاهز للطباعة، ويُعبّأ منه تقرير 4-3-1 للأقسام.'),
+      h('p', null, 'تقرير التحضير الأسبوعي SO09 وتقرير المتدربين المستمرين ST06 من رايات يُقرآن داخل المتصفح ويتحولان إلى مؤشرات حضور ورصد تحضير '
+        + 'وأعداد متدربين لكل قسم وبرنامج، ورسوم تفاعلية، وتقرير تنفيذي جاهز للطباعة، ويُعبّأ منهما تقرير 4-3-1 للأقسام.'),
       d.can_edit && h('div', { class: 'row cal-actions' },
         h('button', { class: 'btn gold', onclick: () => uploadFlow(cycle, reload) }, 'رفع تقرير SO09 (CSV)'),
+        h('button', { class: 'btn ghost', onclick: () => uploadST06(cycle, e, reload) }, e.latest ? 'تحديث ST06' : 'رفع تقرير ST06 (CSV)'),
         d.trainers_total > 0 && h('button', { class: 'btn ghost', onclick: () => mapDialog(reload) },
           `ربط المدربين بالأقسام${d.trainers_unconfirmed ? ` (${num(d.trainers_unconfirmed)} بحاجة لتأكيد)` : ''}`))),
     d.uploads.length > 0 && h('div', { class: 'scope-pick' },
@@ -331,7 +460,8 @@ export async function renderTraining() {
   if (!d.week) {
     return h('div', { class: 'cal-page' }, hero, h('section', { class: 'card empty' }, h('h2', null, 'لم يُرفع تقرير تحضير بعد'),
       h('p', null, d.can_edit ? 'صدّر تقرير SO09 من رايات بصيغة CSV ثم اضغط «رفع تقرير SO09». يُقرأ الملف على جهازك ولا يُحفظ منه إلا الإحصاءات.'
-        : 'تظهر هنا مؤشرات سير العملية التدريبية بعد أن ترفع وكالة الجودة تقرير التحضير الأسبوعي.')));
+        : 'تظهر هنا مؤشرات سير العملية التدريبية بعد أن ترفع وكالة الجودة تقرير التحضير الأسبوعي.')),
+      enrollmentSection(e, null, cycle, reload));
   }
   const c = d.college;
   const banner = d.trainers_unconfirmed > 0 && d.can_edit && h('div', { class: 'qw-patt off' },
@@ -351,7 +481,7 @@ export async function renderTraining() {
   const thr = h('div', { class: 'tr-thr' }, 'المستهدف: الحضور ',
     h('input', { type: 'number', min: 50, max: 100, value: Math.round(tAtt * 100), onchange: e => { setT('att', e.target.value / 100); reload(); } }), '٪ · رصد التحضير ',
     h('input', { type: 'number', min: 50, max: 100, value: Math.round(tRec * 100), onchange: e => { setT('rec', e.target.value / 100); reload(); } }), '٪',
-    h('button', { class: 'btn primary small', onclick: () => printReport(d, tAtt, tRec) }, 'التقرير التنفيذي (طباعة / PDF)'),
+    h('button', { class: 'btn primary small', onclick: () => printReport(d, tAtt, tRec, e) }, 'التقرير التنفيذي (طباعة / PDF)'),
     d.can_edit && h('button', { class: 'btn small', onclick: async () => {
       try {
         const r = await api(`/cycles/${cycle.id}/attendance/${d.week.week_no}/fill-431`, { method: 'POST' });
@@ -394,5 +524,6 @@ export async function renderTraining() {
         h('td', { class: 'tr-bad' }, P(x.recording / 100)), h('td', null, P(x.attendance)))))))
       : h('p', { class: 'muted' }, 'اكتمل رصد التحضير في جميع الشعب.'));
 
-  return h('div', { class: 'cal-page' }, hero, banner, kpis, thr, charts, deptTable, h('div', { class: 'cols2' }, types, low), follow);
+  return h('div', { class: 'cal-page' }, hero, banner, kpis, thr, charts, deptTable, enrollmentSection(e, d, cycle, reload),
+    h('div', { class: 'cols2' }, types, low), follow);
 }

@@ -420,3 +420,30 @@ def test_attendance_add_department(client, auth):
     assert client.post(f"{API}/attendance/departments", headers=auth(DEAN), json=body).json()["existing"]
     names = [d["name_ar"] for d in client.get(f"{API}/departments", headers=auth(DEAN)).json()]
     assert "التقنية الإلكترونية" in names
+
+
+def test_enrollment_st06(client, auth):
+    """ST06: لقطة بداية الفصل والأحدث، مطابقة أسماء الأقسام، اعتماد عدد المتدربين، وصلاحيات القسم."""
+    row = lambda dept, prog, n, shift="صباحي": {"dept_name": dept, "program": prog, "stage": "دبلوم", "shift": shift, "trainees": n}
+    rows = [row("الحاسب وتقنية المعلومات", "تقنية شبكات الحاسب-تطبيقي", 278), row("الحاسب وتقنية المعلومات", "تقنية البرمجة-تطبيقي", 248),
+            row("التقنية الكهربائية", "تقنية القوى كهربائية-تطبيقي", 316), row("تقنية الأرصاد", "برنامج غير موجود", 40, "مسائي")]
+    body = {"term_label": "الفصل التدريبي الأول 1448", "file_name": "st06.csv", "rows": rows}
+    assert client.post(f"{API}/cycles/1/enrollment", headers=auth(COORD), json=body).status_code == 403
+    r = client.post(f"{API}/cycles/1/enrollment", headers=auth(DEAN), json=body).json()
+    assert r["trainees"] == 882 and r["baseline"] and r["unmatched"] == ["تقنية الأرصاد"]
+    s = client.get(f"{API}/cycles/1/enrollment", headers=auth(DEAN)).json()
+    assert s["total"] == 882 and s["same_snapshot"] and s["programs"] == 4
+    cs = next(d for d in s["by_department"] if d["raw_name"] == "الحاسب وتقنية المعلومات")
+    assert cs["department_id"] is not None and cs["trainees"] == 526
+    # تحديث لاحق: يحل محل «الأحدث» وتبقى بداية الفصل للمقارنة
+    rows2 = [row("الحاسب وتقنية المعلومات", "تقنية شبكات الحاسب-تطبيقي", 270), *rows[1:]]
+    assert not client.post(f"{API}/cycles/1/enrollment", headers=auth(DEAN), json={**body, "rows": rows2}).json()["baseline"]
+    s = client.get(f"{API}/cycles/1/enrollment", headers=auth(DEAN)).json()
+    assert not s["same_snapshot"] and s["total"] == 874 and s["baseline_total"] == 882
+    cs = next(d for d in s["by_department"] if d["raw_name"] == "الحاسب وتقنية المعلومات")
+    assert cs["baseline"] == 526 and cs["trainees"] == 518
+    upd = client.post(f"{API}/cycles/1/enrollment/apply-counts", headers=auth(DEAN)).json()["updated"]
+    assert len(upd) == 2
+    mine = client.get(f"{API}/cycles/1/enrollment", headers=auth(COORD)).json()      # منسق القسم يرى قسمه فقط
+    assert all(d["department_id"] == cs["department_id"] for d in mine["by_department"]) and mine["unmatched"] == []
+    assert client.delete(f"{API}/cycles/1/enrollment", headers=auth(DEAN)).json()["deleted"]
