@@ -27,7 +27,10 @@ SHARED = re.compile(r"مقدمة تطبيقات الحاسب|تطبيقات ال
 RULES = [
     ("الدراسات العامة", re.compile(r"إنجليز|انجليز|رياضيات|فيزياء|كيمياء|الثقافة الإسلامية|السلوك الوظيفي|الكتابة الفنية|العربية|بدنية|لياقة")),
     ("الحاسب", re.compile(r"حاسب|شبكات|برمج|الخوارزميات|قواعد البيانات|تشغيل|ويب|أمن|سيبران|البرمجيات|المعلومات|دعم فني|الدعم الفني|انترنت|إنترنت|تصميم|فيديو|الوسائط|الشهادات الاحترافية")),
-    ("الكهربائية", re.compile(r"كهرب|دوائر|الكترون|إلكترون|التحكم|القدرة|محولات|آلات|ميكروويف|اتصالات|قياسات|رقمية|الأقمار")),
+    # الاتصالات والإلكترونية تُقدَّم على الكهربائية؛ إن لم يوجد القسم في المنصة تؤول المقررات للكهربائية
+    ("الاتصالات", re.compile(r"اتصال|الاتصالا|ميكروويف|الأقمار|هوائي|الألياف")),
+    ("الإلكترونية", re.compile(r"إلكترون|الكترون")),
+    ("الكهربائية", re.compile(r"كهرب|دوائر|الكترون|إلكترون|التحكم|القدرة|محولات|آلات|ميكروويف|اتصال|قياسات|رقمية|الأقمار")),
     ("الميكانيكية", re.compile(r"خراطة|تفريز|جلخ|لحام|تشكيل|ميكاني|نيوماتي|هيدرول|المواد|اختبار مواد|محركات|تبريد|تكييف|إنتاج|ورشة|رسم")),
     ("الإدارية", re.compile(r"محاسب|إدار|تسويق|موارد بشرية|مالية|اقتصاد|سكرتار|مكتب|تأمين|بنوك")),
 ]
@@ -68,20 +71,40 @@ def _manager(user: CurrentUser) -> None:
         raise forbid("رفع تقارير رايات وربط المدربين من صلاحية وكيل الجودة")
 
 
+def _norm(t: str) -> str:
+    return re.sub("[أإآ]", "ا", t or "")
+
+
 def suggest(courses: list[str], depts: dict[str, int]) -> int | None:
-    score: dict[str, int] = {}
+    """أكثر قسم موجود في المنصة تتكرر مقرراته عند المدرب (القاعدة الأولى المطابقة لقسم قائم)."""
+    def dept_for(key):
+        return next((i for name, i in depts.items() if _norm(key) in _norm(name)), None)
+    score: dict[int, int] = {}
     for c in courses:
         c = (c or "").strip()
         if not c or SHARED.search(c):
             continue
         for key, rx in RULES:
-            if rx.search(c):
-                score[key] = score.get(key, 0) + 1
+            if rx.search(c) and (d := dept_for(key)) is not None:
+                score[d] = score.get(d, 0) + 1
                 break
-    if not score:
-        return None
-    best = max(score, key=score.get)
-    return next((i for name, i in depts.items() if best in name), None)
+    return max(score, key=score.get) if score else None
+
+
+async def _resuggest(conn, institution_id: int) -> int:
+    """إعادة اقتراح الأقسام للمدربين غير المؤكَّدين (بعد إضافة قسم مثلاً)."""
+    cur = await conn.execute("SELECT id, name_ar FROM department WHERE institution_id = %s AND is_active", (institution_id,))
+    depts = {d["name_ar"]: d["id"] for d in await cur.fetchall()}
+    cur = await conn.execute(
+        """SELECT t.trainer_no, (SELECT array_agg(s.course_name) FROM attendance_section s WHERE s.trainer_no = t.trainer_no) AS courses
+             FROM trainer_department t WHERE t.institution_id = %s AND NOT t.confirmed""", (institution_id,))
+    n = 0
+    for t in await cur.fetchall():
+        d = suggest(t["courses"] or [], depts)
+        r = await conn.execute("""UPDATE trainer_department SET department_id = %s WHERE institution_id = %s AND trainer_no = %s
+                                    AND department_id IS DISTINCT FROM %s""", (d, institution_id, t["trainer_no"], d))
+        n += r.rowcount
+    return n
 
 
 async def _actor(conn, user):
@@ -163,6 +186,32 @@ async def map_trainers(body: MapIn, user: CurrentUser = Depends(current_user), c
             (it.get("department_id"), user.institution_id, str(it.get("trainer_no"))))
         n += cur.rowcount
     return {"updated": n}
+
+
+class DeptIn(BaseModel):
+    name_ar: str = Field(min_length=2, max_length=120)
+
+
+@router.post("/attendance/departments", status_code=201)
+async def add_department(body: DeptIn, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+    """إضافة قسم تدريبي غير موجود (مثل الاتصالات أو التقنية الإلكترونية) ثم إعادة اقتراح ربط غير المؤكَّدين."""
+    _manager(user)
+    await _actor(conn, user)
+    name = " ".join(body.name_ar.split())
+    cur = await conn.execute("SELECT id FROM department WHERE institution_id = %s AND name_ar = %s", (user.institution_id, name))
+    if (row := await cur.fetchone()) is not None:
+        return {"id": row["id"], "name_ar": name, "existing": True, "resuggested": 0}
+    cur = await conn.execute("SELECT count(*) AS n FROM department WHERE institution_id = %s", (user.institution_id,))
+    k = (await cur.fetchone())["n"] + 1
+    while True:
+        cur = await conn.execute("SELECT 1 FROM department WHERE institution_id = %s AND code = %s", (user.institution_id, f"D{k}"))
+        if not await cur.fetchone():
+            break
+        k += 1
+    cur = await conn.execute("INSERT INTO department (institution_id, code, name_ar) VALUES (%s, %s, %s) RETURNING id",
+                             (user.institution_id, f"D{k}", name))
+    did = (await cur.fetchone())["id"]
+    return {"id": did, "name_ar": name, "existing": False, "resuggested": await _resuggest(conn, user.institution_id)}
 
 
 def _agg(rows: list[dict]) -> dict:

@@ -161,17 +161,74 @@ function uploadFlow(cycle, reload) {
 
 async function mapDialog(reload) {
   const list = await api('/attendance/trainers');
-  const depts = state.departments;
-  const sels = list.map(t => h('select', { class: 'input' }, h('option', { value: '' }, '— اختر القسم —'),
-    depts.map(d => h('option', { value: String(d.id), selected: d.id === t.department_id }, d.name_ar))));
+  const touched = new Set();
+  const opt = d => h('option', { value: String(d.id) }, d.name_ar);
+  const sels = list.map((t, i) => {
+    const sel = h('select', { class: 'input', onchange: () => touched.add(i) }, h('option', { value: '' }, '— اختر القسم —'),
+      state.departments.map(opt));
+    sel.value = t.department_id ? String(t.department_id) : '';
+    return sel;
+  });
+  const checks = list.map(() => h('input', { type: 'checkbox' }));
+  const rows = list.map((t, i) => h('tr', { class: t.confirmed ? '' : 'pending' },
+    h('td', null, checks[i]),
+    h('td', null, t.trainer_name ?? t.trainer_no, !t.confirmed && h('small', { class: 'chip c-mid' }, 'مقترح')),
+    h('td', { class: 'faint' }, (t.courses ?? []).filter(Boolean).slice(0, 4).join('، ')),
+    h('td', null, sels[i])));
+  // تصفية: بحث بالاسم/المقرر + القسم الحالي
+  const q = h('input', { class: 'input', type: 'search', placeholder: 'ابحث باسم المدرب أو المقرر…', oninput: filter });
+  const fDept = h('select', { class: 'input', onchange: filter }, h('option', { value: '*' }, 'كل الأقسام'),
+    h('option', { value: '' }, 'غير مربوط'), state.departments.map(opt));
+  function filter() {
+    const t = q.value.trim();
+    list.forEach((x, i) => {
+      const text = `${x.trainer_name ?? ''} ${(x.courses ?? []).join(' ')}`;
+      const okText = !t || text.includes(t);
+      const okDept = fDept.value === '*' || sels[i].value === fDept.value;
+      rows[i].hidden = !(okText && okDept);
+    });
+  }
+  // نقل جماعي للمحدد
+  const bulk = h('select', { class: 'input' }, h('option', { value: '' }, 'نقل المحدَّد إلى…'), state.departments.map(opt));
+  bulk.onchange = () => {
+    if (!bulk.value) return;
+    let n = 0;
+    checks.forEach((c, i) => { if (c.checked && !rows[i].hidden) { sels[i].value = bulk.value; touched.add(i); c.checked = false; n++; } });
+    toast(n ? `نُقل ${num(n)} مدرب — اضغط «تأكيد وحفظ الربط» للحفظ` : 'حدّد مدربين أولاً');
+    bulk.value = ''; filter();
+  };
+  const all = h('input', { type: 'checkbox', title: 'تحديد الظاهر', onchange: e => checks.forEach((c, i) => { if (!rows[i].hidden) c.checked = e.target.checked; }) });
+  // إضافة قسم غير موجود (مثل الاتصالات أو التقنية الإلكترونية)
+  const newName = h('input', { class: 'input', placeholder: 'اسم قسم جديد، مثل: التقنية الإلكترونية',
+    onkeydown: e => { if (e.key === 'Enter') { e.preventDefault(); addBtn.click(); } } });
+  const addBtn = h('button', { type: 'button', class: 'btn', onclick: async () => {
+    const name = newName.value.trim(); if (name.length < 2) { newName.focus(); return; }
+    try {
+      const r = await api('/attendance/departments', { method: 'POST', body: { name_ar: name } });
+      if (!r.existing) {
+        const d = { id: r.id, name_ar: r.name_ar };
+        state.departments.push(d);
+        [...sels, fDept, bulk].forEach(s => s.append(opt(d)));
+        // تحديث الاقتراحات لغير المؤكَّدين ما لم يعدّلها المستخدم يدوياً
+        const fresh = await api('/attendance/trainers');
+        const byNo = new Map(fresh.map(x => [x.trainer_no, x]));
+        let moved = 0;
+        list.forEach((t, i) => {
+          const f = byNo.get(t.trainer_no);
+          if (!t.confirmed && !touched.has(i) && f && f.department_id === r.id) { sels[i].value = String(r.id); moved++; }
+        });
+        toast(`أُضيف قسم «${r.name_ar}»${moved ? ` واقتُرح له ${num(moved)} مدرب` : ''} — اختره للمدربين ثم احفظ`);
+      } else toast(`القسم «${r.name_ar}» موجود مسبقاً`);
+      newName.value = ''; filter();
+    } catch (ex) { toast(ex.message, 'error'); }
+  } }, '+ إضافة القسم');
   dialog('ربط المدربين بالأقسام', [
-    h('p', { class: 'qw-tip' }, 'تقرير SO09 لا يحتوي عمود القسم؛ اقترحت المنصة قسم كل مدرب من مقرراته. راجع غير المؤكَّد (في الأعلى) ثم احفظ — يُحفظ الربط لكل الأسابيع القادمة.'),
+    h('p', { class: 'qw-tip' }, 'تقرير SO09 لا يحتوي عمود القسم؛ اقترحت المنصة قسم كل مدرب من مقرراته. عدّل من القائمة أو حدّد عدة مدربين وانقلهم دفعة واحدة، ثم احفظ — يُحفظ الربط لكل الأسابيع القادمة. القسم غير الموجود أضِفه من الأسفل.'),
+    h('div', { class: 'tr-maptools' }, q, fDept, bulk),
     h('div', { class: 'tr-map' }, h('table', { class: 'data' },
-      h('thead', null, h('tr', null, h('th', null, 'المدرب'), h('th', null, 'مقرراته'), h('th', null, 'القسم'))),
-      h('tbody', null, list.map((t, i) => h('tr', { class: t.confirmed ? '' : 'pending' },
-        h('td', null, t.trainer_name ?? t.trainer_no, !t.confirmed && h('small', { class: 'chip c-mid' }, 'مقترح')),
-        h('td', { class: 'faint' }, (t.courses ?? []).filter(Boolean).slice(0, 4).join('، ')),
-        h('td', null, sels[i]))))))],
+      h('thead', null, h('tr', null, h('th', null, all), h('th', null, 'المدرب'), h('th', null, 'مقرراته'), h('th', null, 'القسم'))),
+      h('tbody', null, rows))),
+    h('div', { class: 'tr-maptools' }, newName, addBtn)],
   async () => {
     const items = list.map((t, i) => ({ trainer_no: t.trainer_no, department_id: sels[i].value ? Number(sels[i].value) : null }))
       .filter(x => x.department_id);

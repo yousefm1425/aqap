@@ -404,3 +404,19 @@ def test_attendance_so09(client, auth):
     assert client.post(f"{API}/cycles/1/attendance", headers=auth(DEAN), json={**body, "rows": rows[:1]}).json()["rows"] == 1   # إعادة رفع الأسبوع تستبدله
     assert len(client.get(f"{API}/cycles/1/attendance", headers=auth(DEAN)).json()["uploads"]) == 1
     assert client.delete(f"{API}/cycles/1/attendance/7", headers=auth(DEAN)).json()["deleted"]
+
+
+def test_attendance_add_department(client, auth):
+    """إضافة قسم غير موجود (الاتصالات/الإلكترونية) من نافذة الربط، واقتراح المقررات له بدل الكهربائية."""
+    from app.routers.attendance import suggest
+    base = {"التقنية الكهربائية": 2, "تقنية الحاسب": 1}
+    assert suggest(["أساسيات الاتصالات الرقمية", "نظم اتصالات"], base) == 2            # لا قسم اتصالات ← الكهربائية
+    assert suggest(["أساسيات الاتصالات الرقمية", "نظم اتصالات"], {**base, "الاتصالات": 9}) == 9
+    assert suggest(["ورشة الكترونيات أساسية", "إلكترونيات القوى"], {**base, "التقنية الإلكترونية": 8}) == 8
+    body = {"name_ar": "التقنية  الإلكترونية"}
+    assert client.post(f"{API}/attendance/departments", headers=auth(COORD), json=body).status_code == 403
+    r = client.post(f"{API}/attendance/departments", headers=auth(DEAN), json=body).json()
+    assert r["name_ar"] == "التقنية الإلكترونية" and not r["existing"]
+    assert client.post(f"{API}/attendance/departments", headers=auth(DEAN), json=body).json()["existing"]
+    names = [d["name_ar"] for d in client.get(f"{API}/departments", headers=auth(DEAN)).json()]
+    assert "التقنية الإلكترونية" in names
