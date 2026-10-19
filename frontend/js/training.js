@@ -63,21 +63,22 @@ function guessPeriod(fileName, cycle) {
 }
 
 // ------------------------------------------------------------------ الرسوم (SVG)
-function groupedBars(items, target) {           // صف لكل قسم: شريط الحضور وشريط رصد التحضير
-  const W = 640, L = 150, bh = 14, gap = 22, H = items.length * (bh * 2 + gap) + 30;
-  const x = v => L + (W - L - 50) * Math.max(0, Math.min(1, v ?? 0));
-  const g = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'tr-chart', role: 'img', 'aria-label': 'الحضور ورصد التحضير لكل قسم' });
+function groupedBars(items, target) {           // صف لكل قسم: شريط الحضور وشريط رصد التحضير (من اليمين لليسار)
+  const W = 640, L = 165, bh = 14, gap = 22, H = items.length * (bh * 2 + gap) + 30;
+  const x0 = W - L, span = x0 - 60;
+  const x = v => x0 - span * Math.max(0, Math.min(1, v ?? 0));
+  const g = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'tr-chart', direction: 'rtl', role: 'img', 'aria-label': 'الحضور ورصد التحضير لكل قسم' });
   [0, .25, .5, .75, 1].forEach(t => g.append(s('line', { x1: x(t), x2: x(t), y1: 0, y2: H - 22, class: 'grid' }),
     s('text', { x: x(t), y: H - 6, class: 'tick', 'text-anchor': 'middle' }, `${t * 100}%`)));
   if (target) g.append(s('line', { x1: x(target), x2: x(target), y1: 0, y2: H - 22, class: 'target' }));
   items.forEach((it, i) => {
     const y = i * (bh * 2 + gap) + 6;
-    g.append(s('text', { x: L - 10, y: y + bh + 4, class: 'lbl', 'text-anchor': 'end' }, it.name));
+    g.append(s('text', { x: W - 4, y: y + bh + 4, class: 'lbl', 'text-anchor': 'start' }, it.name));
     [[it.attendance, ATT, 'الحضور'], [it.recording, REC, 'رصد التحضير']].forEach(([v, c, t], k) => {
-      const yy = y + k * (bh + 2);
-      g.append(s('rect', { x: L, y: yy, width: Math.max(2, x(v) - L), height: bh, rx: 4, fill: c },
+      const yy = y + k * (bh + 2), len = Math.max(2, x0 - x(v));
+      g.append(s('rect', { x: x0 - len, y: yy, width: len, height: bh, rx: 4, fill: c },
         s('title', null, `${it.name} — ${t}: ${P(v)}`)),
-      s('text', { x: x(v) + 6, y: yy + bh - 3, class: 'val' }, P(v)));
+      s('text', { x: x0 - len - 6, y: yy + bh - 3, class: 'val', 'text-anchor': 'start' }, P(v)));
     });
   });
   return g;
@@ -89,7 +90,7 @@ function trendLine(points, deps) {
   const x = w => (points.length < 2 ? (L + W - R) / 2 : L + (W - L - R) * ((w - xs[0]) / (xs[xs.length - 1] - xs[0] || 1)));
   const lo = Math.min(.5, ...points.flatMap(p => [p.attendance ?? 1, p.recording ?? 1])) - .05;
   const y = v => T + (H - T - B) * (1 - (v - lo) / (1 - lo));
-  const g = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'tr-chart', role: 'img', 'aria-label': 'اتجاه الحضور ورصد التحضير أسبوعياً' });
+  const g = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'tr-chart', direction: 'ltr', role: 'img', 'aria-label': 'اتجاه الحضور ورصد التحضير أسبوعياً' });
   for (let t = Math.ceil(lo * 10) / 10; t <= 1.0001; t += .1) {
     g.append(s('line', { x1: L, x2: W - R, y1: y(t), y2: y(t), class: 'grid' }), s('text', { x: L - 8, y: y(t) + 4, class: 'tick', 'text-anchor': 'end' }, `${Math.round(t * 100)}%`));
   }
