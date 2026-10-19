@@ -263,7 +263,7 @@ function printReport(d, tAtt, tRec, e) {
     <td>${num(x.incomplete)}</td><td>${num(x.deprived)}</td><td>${num(x.withdrawn)}</td></tr>`).join('');
   const fu = d.follow_up.slice(0, 30).map((x, i) => `<tr><td>${i + 1}</td><td>${x.department}</td><td>${x.trainer ?? ''}</td><td>${(x.course ?? '').trim()}</td>
     <td>${x.section ?? ''}</td><td class="bad">${P(x.recording / 100)}</td></tr>`).join('');
-  const enr = e?.latest ? `<div style="break-inside:avoid"><h2>المتدربون المستمرون والبرامج (ST06${e.latest.term_label ? ` — ${e.latest.term_label}` : ''})</h2>
+  const enr = e?.latest && e.by_department?.length ? `<div style="break-inside:avoid"><h2>المتدربون المستمرون والبرامج (ST06${e.latest.term_label ? ` — ${e.latest.term_label}` : ''})</h2>
     <p class="sub" style="margin:0 0 4px">إجمالي المتدربين المستمرين ${num(e.total)} في ${num(e.programs)} برنامج${e.same_snapshot ? '' : ` · بداية الفصل ${num(e.baseline_total)} (الاستمرار ${P(e.baseline_total ? e.total / e.baseline_total : null)})`}</p>
     <table><tr><th>القسم</th><th>البرامج</th><th>المتدربون</th>${e.same_snapshot ? '' : '<th>بداية الفصل</th>'}<th>المدربون</th><th>متدرب لكل مدرب</th></tr>
     ${e.by_department.map(x => `<tr><td>${x.name}</td><td>${x.programs.map(p => p.program.replace(/\s*-\s*تطبيقي$/, '').replace(/-تطبيقي$/, '') + (p.shift && p.shift !== 'صباحي' ? ` (${p.shift})` : '')).join('، ')}</td>
@@ -400,6 +400,9 @@ function enrollmentSection(e, d, cycle, reload) {
     return h('section', { class: 'panel' }, head, h('p', { class: 'muted' }, e.can_edit
       ? 'ارفع تقرير ST06 من رايات (CSV) مرة في بداية الفصل، ثم كلما تحدّث. يُستخدم مصدراً لعدد متدربي كل قسم ولنسبة المتدربين لكل مدرب والاستمرار خلال الفصل.'
       : 'تظهر هنا أعداد المتدربين المستمرين لكل برنامج بعد أن ترفع وكالة الجودة تقرير ST06.'));
+  }
+  if (!e.by_department?.length) {
+    return h('section', { class: 'panel' }, head, h('p', { class: 'muted' }, 'لا توجد برامج لهذا القسم في تقرير ST06 (مثل قسم الدراسات العامة).'));
   }
   const kpi = (label, value, cls, sub) => h('div', { class: `tr-kpi ${cls ?? ''}` }, h('small', null, label), h('b', null, value), sub && h('span', null, sub));
   const change = e.total - e.baseline_total;

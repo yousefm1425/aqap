@@ -7,3 +7,4 @@ _storage/
 # القالب الرسمي ملف داخلي للمؤسسة؛ لا يُرفع إلى مستودع عام
 templates/*.xlsb
 templates/*.xlsx
+smoke-report.html
