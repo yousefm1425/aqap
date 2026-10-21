@@ -145,6 +145,9 @@ def main(dsn: str) -> None:
             conn.execute("UPDATE improvement_action SET completion_evidence_id = %s WHERE id = %s", (cs_ev, pid))
             conn.execute("SELECT transition_action(%s,'completed',%s)", (pid, coord))
             conn.execute("SELECT transition_action(%s,'verified',%s,'تم التحقق من الشاهد')", (pid, dean))
+        # نصوص المتطلبات الرسمية بدل النصوص التجريبية (المصدر الوحيد: ملف الترحيل 017)
+        from pathlib import Path
+        conn.execute((Path(__file__).resolve().parents[1] / "db" / "migrations" / "017_official_requirement_texts.sql").read_text(encoding="utf-8"))
         print("demo data ready")
 
 
