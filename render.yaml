@@ -1,0 +1,29 @@
+# Render Blueprint — نسخة تجريبية من منصة الجودة والاعتماد (بيانات عرض فقط)
+# من لوحة Render: New ← Blueprint ← اختر هذا المستودع ← Apply
+services:
+  - type: web
+    name: aqap-trial
+    runtime: docker
+    plan: free
+    region: frankfurt
+    healthCheckPath: /health
+    envVars:
+      - key: AQAP_DATABASE_URL
+        fromDatabase:
+          name: aqap-db
+          property: connectionString
+      - key: AQAP_ENV
+        value: dev               # الدخول بالبريد فقط — للتجربة ببيانات العرض، لا بيانات حقيقية
+      - key: AQAP_STORAGE_BACKEND
+        value: local
+      - key: AQAP_JWT_SECRET
+        generateValue: true
+      - key: AQAP_SEED_DEMO
+        value: "1"
+
+databases:
+  - name: aqap-db
+    plan: free
+    region: frankfurt
+    databaseName: aqap
+    user: aqap

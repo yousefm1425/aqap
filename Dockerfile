@@ -17,4 +17,5 @@ COPY db ./db
 RUN useradd --create-home --uid 10001 aqap && chown -R aqap /srv
 USER aqap
 EXPOSE 8000
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]
+# يهيئ القاعدة (المخطط أو الترحيلات) ثم يشغّل الخادم؛ Render يحدد المنفذ في PORT
+CMD ["sh", "-c", "python scripts/init_db.py && exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips=*"]
