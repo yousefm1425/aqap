@@ -6,6 +6,85 @@ import { date, h, mount, num, promptText, toast } from './ui.js';
 
 const MODES = { both: 'الروابط والملفات معاً', links: 'الروابط فقط (OneDrive / SharePoint)', files: 'رفع الملفات فقط' };
 
+
+// ------------------------------------------------------------------ توليد الروابط من مجلد OneDrive رئيسي
+// الهيكل: المجلد الرئيسي ← مجلد لكل معيار ← مجلد لكل معيار فرعي ← مجلد لكل قسم
+const STD_DEFAULT = { 1: 'المعيار الاول القيادة الادارية', 2: 'المعيار الثاني نواتج التدريب', 3: 'المعيار الثالث المناهج وأدوات القياس والتقويم',
+  4: 'المعيار الرابع التدريب والموارد المساندة', 5: 'المعيار الخامس البيئة التدريبية', 6: 'المعيار السادس الاستدامة' };
+const DEPT_DEFAULT = { 'تقنية الحاسب': 'تقنية الحاسب الآلي', 'التقنية الإلكترونية': 'التقنية الالكترونية' };
+const KEY = 'aqap.folderGen';
+const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; } };
+const keep = v => { try { localStorage.setItem(KEY, JSON.stringify(v)); } catch { /* تخزين غير متاح */ } };
+
+/** يحلل رابط المجلد الرئيسي (رابط شريط العنوان في OneDrive) إلى: الخادم، ومسار مكتبة المستندات، ومسار المجلد */
+function parseRoot(raw) {
+  let u;
+  try { u = new URL(raw.trim()); } catch { throw new Error('الرابط غير صالح'); }
+  let path = u.searchParams.get('id') || decodeURIComponent(u.pathname);
+  path = path.replace(/\/Forms\/[^/]+\.aspx$/i, '').replace(/\/+$/, '');
+  const m = /^(\/personal\/[^/]+\/[^/]+|\/sites\/[^/]+\/[^/]+)(\/.*)?$/.exec(path);
+  if (!m || !m[2]) throw new Error('انسخ الرابط من شريط العنوان وأنت داخل المجلد الرئيسي في OneDrive');
+  return { origin: u.origin, library: m[1], path };
+}
+const folderUrl = (root, parts) => {
+  const full = [root.path, ...parts].join('/');
+  return `${root.origin}${encodeURI(root.library)}/Forms/All.aspx?id=${encodeURIComponent(full)}`;
+};
+
+function generator(cycle, tree, reload) {
+  const saved = load();
+  const stdMap = new Map(), subs = [];
+  for (const r of tree.requirements) {
+    if (!stdMap.has(r.standard_code)) stdMap.set(r.standard_code, r.standard_title);
+    if (!subs.some(x => x.code === r.sub_standard_code)) subs.push({ code: r.sub_standard_code, std: r.standard_code, title: r.sub_standard_title });
+  }
+  const input = (v, wide) => h('input', { class: 'input', value: v, style: wide ? { width: '100%' } : null });
+  const rootIn = h('input', { class: 'input', dir: 'ltr', placeholder: 'https://…-my.sharepoint.com/my?id=%2Fpersonal%2F…%2FDocuments%2FQuality%20cat2027',
+    value: saved.root ?? '', style: { width: '100%' } });
+  const stdIns = new Map([...stdMap].map(([c, t]) => [c, input(saved.std?.[c] ?? STD_DEFAULT[c] ?? `المعيار ${c} ${t}`)]));
+  const subIns = new Map(subs.map(x => [x.code, input(saved.sub?.[x.code] ?? `${x.code} ${x.title}`)]));
+  const deptIns = new Map(state.departments.map(d => [d.id, input(saved.dept?.[d.id] ?? DEPT_DEFAULT[d.name_ar] ?? d.name_ar)]));
+  const out = h('div');
+  const names = () => ({ root: rootIn.value.trim(), std: Object.fromEntries([...stdIns].map(([k, i]) => [k, i.value.trim()])),
+    sub: Object.fromEntries([...subIns].map(([k, i]) => [k, i.value.trim()])), dept: Object.fromEntries([...deptIns].map(([k, i]) => [k, i.value.trim()])) });
+  const build = () => {
+    const n = names(); keep(n);
+    const root = parseRoot(n.root);
+    const items = [];
+    for (const d of state.departments) {
+      items.push({ department_id: d.id, target_code: null, url: folderUrl(root, []) });
+      for (const x of subs) items.push({ department_id: d.id, target_code: x.code, url: folderUrl(root, [n.std[x.std], n.sub[x.code], n.dept[d.id]]) });
+    }
+    return items;
+  };
+  const preview = () => {
+    try {
+      const items = build();
+      const sample = items.filter(i => i.target_code).filter((_, k, a) => k === 0 || k === a.length - 1 || k === Math.floor(a.length / 2));
+      mount(out, h('div', { class: 'qw-tip' },
+        h('p', null, `سيُحفظ ${num(items.length)} رابطاً: المجلد الرئيسي مجلداً عاماً لكل قسم، ومجلد كل قسم داخل كل معيار فرعي (${num(subs.length)} × ${num(state.departments.length)}). `
+          + 'افتح الأمثلة للتأكد أن كل رابط يفتح المجلد الصحيح قبل الحفظ:'),
+        h('ul', null, sample.map(i => h('li', null, h('a', { href: i.url, target: '_blank', rel: 'noopener' },
+          `${deptName(i.department_id)} — المعيار الفرعي ${i.target_code}`)))),
+        h('button', { class: 'btn primary', onclick: async () => {
+          try { const r = await api(`/cycles/${cycle.id}/folders/bulk`, { method: 'PUT', body: { items } }); toast(`حُفظ ${num(r.saved)} رابط مجلد`); reload(); }
+          catch (ex) { toast(ex.message, 'error'); }
+        } }, `حفظ ${num(items.length)} رابطاً`)));
+    } catch (ex) { mount(out, h('div', { class: 'error-box' }, ex.message)); }
+  };
+  const grid = (title, ins, label) => h('details', { class: 'fold-names' }, h('summary', null, title),
+    h('div', { class: 'fold-grid' }, [...ins].map(([k, i]) => h('label', null, h('span', { class: 'faint' }, label(k)), i))));
+  return h('section', { class: 'panel' },
+    h('header', null, h('h2', null, 'توليد روابط المجلدات من مجلد OneDrive رئيسي')),
+    h('p', { class: 'faint' }, 'إذا أنشأت مجلداً رئيسياً فيه مجلد لكل معيار، وداخله مجلد لكل معيار فرعي، وداخله مجلد لكل قسم: الصق رابط المجلد الرئيسي من شريط العنوان، '
+      + 'وتأكد أن أسماء المجلدات أدناه مطابقة حرفياً لأسمائها في OneDrive، ثم «معاينة».'),
+    h('div', { class: 'field' }, h('label', null, 'رابط المجلد الرئيسي'), rootIn),
+    grid(`أسماء مجلدات المعايير (${num(stdIns.size)})`, stdIns, k => `المعيار ${k}`),
+    grid(`أسماء مجلدات المعايير الفرعية (${num(subIns.size)})`, subIns, k => k),
+    grid(`أسماء مجلدات الأقسام (${num(deptIns.size)})`, deptIns, k => deptName(Number(k))),
+    h('div', { class: 'row end' }, h('button', { class: 'btn', onclick: preview }, 'معاينة')), out);
+}
+
 export async function renderFolders() {
   const cycle = state.cycle;
   const { params } = parseRoute();
@@ -98,6 +177,7 @@ export async function renderFolders() {
         h('div', { class: 'scope-stats' }, h('span', null, h('b', null, num(folders.length)), ' مجلد محدد'),
           h('span', null, h('b', null, num(problems.length)), ' رابط معطل')))),
     settingsCard,
+    edit && generator(cycle, tree, reload),
     h('section', { class: 'panel' },
       h('header', null, h('h2', null, `مجلدات ${deptName(dept)} — ${cycle.title_ar}`)),
       h('table', { class: 'data fold-table' }, h('tbody', null,

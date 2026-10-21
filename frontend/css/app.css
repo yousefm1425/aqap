@@ -644,3 +644,7 @@ dialog:has(.tr-wide) { width: min(56rem, 96vw); }
 
 /* الشعار بلا خلفية: نسخة فاتحة على الشريط الأخضر */
 .topbar .org-logo { background: none; padding: 0; border-radius: 0; box-shadow: none; }
+
+.fold-names { margin: .5rem 0; } .fold-names summary { cursor: pointer; font-weight: 600; padding: .3rem 0; }
+.fold-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); gap: .5rem .9rem; margin-top: .5rem; }
+.fold-grid label { display: flex; flex-direction: column; gap: .15rem; }

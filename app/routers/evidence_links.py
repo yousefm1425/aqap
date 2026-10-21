@@ -102,6 +102,26 @@ async def set_folder(cycle_id: int, body: FolderIn, user: CurrentUser = Depends(
                      conn: AsyncConnection = Depends(get_conn)):
     cycle = await load_cycle(conn, user, cycle_id)
     _manager(user)
+    return await _save_folder(conn, user, cycle, body)
+
+
+class FoldersBulkIn(BaseModel):
+    items: list[FolderIn] = Field(min_length=1, max_length=500)
+
+
+@router.put("/cycles/{cycle_id}/folders/bulk")
+async def set_folders_bulk(cycle_id: int, body: FoldersBulkIn, user: CurrentUser = Depends(current_user),
+                           conn: AsyncConnection = Depends(get_conn)):
+    """حفظ روابط مجلدات كثيرة دفعة واحدة (توليدها من مجلد OneDrive رئيسي: معيار ← معيار فرعي ← قسم)."""
+    cycle = await load_cycle(conn, user, cycle_id)
+    _manager(user)
+    for it in body.items:
+        await _save_folder(conn, user, cycle, it)
+    return {"saved": len(body.items)}
+
+
+async def _save_folder(conn, user, cycle, body: FolderIn) -> dict:
+    cycle_id = cycle["id"]
     url = body.url.strip()
     await assert_link_ok(conn, user.institution_id, url)
     std_id = sub_id = None
