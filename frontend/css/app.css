@@ -622,3 +622,21 @@ dialog:has(.tr-wide) { width: min(56rem, 96vw); }
 .tr-enr h3 { font-size: 1rem; margin: 1rem 0 .4rem; } .tr-prog { max-width: 900px; }
 .tr-maptools { display: flex; gap: .5rem; flex-wrap: wrap; margin: .5rem 0; } .tr-maptools .input { flex: 1 1 12rem; width: auto; }
 .tr-map { max-height: 55vh; overflow: auto; } .tr-map tr.pending td { background: #FFFBF0; } .tr-map td small { margin-inline-start: .4rem; }
+
+/* هوية المؤسسة: الشعار على بطاقة بيضاء وتحته اسم الكلية */
+.topbar .brand { align-items: center; gap: .3rem; }
+.topbar .org-logo { display: block; background: #fff; border-radius: 9px; padding: 4px 9px; }
+.topbar .org-logo img { display: block; height: 30px; width: auto; }
+.topbar .brand > span:last-child { font-size: .78rem; font-weight: 600; opacity: .95; }
+.login-brand { display: flex; flex-direction: column; align-items: center; gap: .4rem; padding-bottom: 1rem; margin-bottom: .5rem; border-bottom: 1px solid var(--line, #e3ecea); }
+.login-brand img { height: 46px; width: auto; }
+.login-brand span { font-weight: 700; color: var(--primary); }
+.topbar .brand > .org-logo { opacity: 1; }
+.topbar .org-logo img { height: 34px; }
+@media (max-width: 700px) {
+  .topbar { grid-template-columns: 1fr; padding: .6rem 1rem; }
+  .topbar .brand { align-items: center; }
+  .topbar .top-side { flex-direction: row; justify-content: space-between; align-items: center; width: 100%; }
+  .topbar .top-side select { max-width: 60vw; }
+  .topbar nav { grid-row: auto; }
+}

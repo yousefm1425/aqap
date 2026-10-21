@@ -60,6 +60,8 @@ function renderLogin(message) {
       await boot();
     } catch (ex) { mount(err, h('div', { class: 'error-box' }, ex.message)); }
   } },
+    h('div', { class: 'login-brand' }, h('img', { src: 'img/tvtc-logo.png', alt: 'المؤسسة العامة للتدريب التقني والمهني' }),
+      h('span', null, 'الكلية التقنية التطبيقية بينبع')),
     h('h1', null, 'منصة الجودة والاعتماد'),
     h('p', { class: 'muted' }, 'سجّل الدخول بحسابك في الكلية للوصول إلى تقديرات قسمك ومؤشرات الجاهزية.'),
     h('div', { class: 'field' }, h('label', { for: 'email' }, 'البريد الإلكتروني'), email),
@@ -83,7 +85,9 @@ function shell(content) {
   const roles = [...new Set(state.me.grants.map(g => ROLE[g.role]))].join('، ');
   return [
     h('header', { class: 'topbar' },
-      h('a', { class: 'brand', href: 'home.html', title: 'الصفحة الرئيسية' }, h('strong', null, 'منصة الجودة والاعتماد'), h('span', null, state.me.institution_name ?? '')),
+      h('a', { class: 'brand', href: 'home.html', title: 'منصة الجودة والاعتماد — الصفحة الرئيسية' },
+        h('span', { class: 'org-logo' }, h('img', { src: 'img/tvtc-logo.png', alt: 'المؤسسة العامة للتدريب التقني والمهني' })),
+        h('span', null, state.me.institution_name ?? 'الكلية التقنية التطبيقية بينبع')),
       h('nav', { 'aria-label': 'الأقسام الرئيسية' },
         // الصف الأول: العمل اليومي للأقسام — الصف الثاني: المتابعة والتقارير والإدارة
         h('div', { class: 'nav-row' },
