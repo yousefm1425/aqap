@@ -1,6 +1,7 @@
 // نطاق المتطلبات: ما ينطبق على كل قسم وما هو خارج اختصاصه (بقرار وكالة الجودة)
 import { api, ApiError } from './api.js';
 import { deptName, go, parseRoute, state, userScope } from './app.js';
+import { STATUS } from './labels.js';
 import { date, h, mount, num, promptText, toast } from './ui.js';
 
 export async function renderScope() {
@@ -12,7 +13,24 @@ export async function renderScope() {
   const selected = new Set();
 
   async function draw() {
-    const data = await api(`/departments/${dept}/applicability`);
+    const cid = state.cycle?.id;
+    const [data, assess, forms, minutes] = await Promise.all([
+      api(`/departments/${dept}/applicability`),
+      cid ? api(`/cycles/${cid}/assessments`).catch(() => []) : [],
+      cid ? api(`/cycles/${cid}/forms/templates?department_id=${dept}`).catch(() => []) : [],
+      cid ? api(`/cycles/${cid}/minutes/templates?department_id=${dept}`).catch(() => []) : []]);
+    // روابط إكمال المهمة لكل متطلب: التقدير والشواهد، والمحاضر، والخطط والتقارير (النماذج)
+    const aByReq = new Map(assess.filter(a => a.department_id === dept).map(a => [a.requirement_code, a]));
+    const tasks = new Map(), subTasks = new Map();
+    const push = (m, k, v) => { if (!m.has(k)) m.set(k, []); m.get(k).push(v); };
+    for (const t of forms) {
+      const link = { kind: 'form', label: t.title_ar, href: `#/forms?dept=${dept}&t=${t.id}` };
+      String(t.requirement_code).includes('/') ? push(subTasks, t.requirement_code.split('/')[0], link) : push(tasks, t.requirement_code, link);
+    }
+    for (const t of minutes) push(tasks, t.requirement_code, { kind: 'minutes', label: t.title_ar, href: `#/minutes?dept=${dept}&tpl=${t.id}` });
+    const ICON = { form: '📄 ', minutes: '🗒️ ', assess: '✔️ ' };
+    const taskLinks = list => list.length > 0 && h('div', { class: 'sreq-links' },
+      list.map(l => h('a', { class: `task-link t-${l.kind}`, href: l.href }, ICON[l.kind], l.label)));
     const edit = data.can_edit;
     selected.clear();
     const bar = h('div', { class: 'scope-bar' });
@@ -72,7 +90,15 @@ export async function renderScope() {
             r.model_allows ? h('span', { class: 'chip c-good' }, '★ النموذج يقبل «لا ينطبق»') : null,
             ex && !r.within_model_rule && h('span', { class: 'chip c-bad' }, 'خارج شرط النجمة'),
             ex && h('span', { class: 'chip c-mid' }, 'خارج نطاق القسم')),
-          h('p', null, r.text_ar),
+          (() => {
+            const a = aByReq.get(r.requirement_code);
+            const list = tasks.get(r.requirement_code) ?? [];
+            const primary = list[0]?.href ?? (a ? `#/workspace?dept=${dept}&a=${a.id}` : null);
+            return [
+              ex || !primary ? h('p', null, r.text_ar) : h('a', { class: 'sreq-text', href: primary, title: 'فتح المتطلب لإكمال المهمة' }, r.text_ar),
+              !ex && taskLinks([...list, ...(a ? [{ kind: 'assess', label: `التقدير والشواهد${a.status ? ` — ${STATUS[a.status] ?? a.status}` : ''}`,
+                href: `#/workspace?dept=${dept}&a=${a.id}` }] : [])])];
+          })(),
           ex && h('p', { class: 'sreq-why' }, `المسوّغ: ${r.reason_ar} — ${r.decided_by_name ?? ''} · ${date(r.decided_at)}`)),
         ex && edit && h('button', { class: 'btn small', onclick: () => restore(r) }, 'إعادة للنطاق'));
     };
@@ -90,6 +116,7 @@ export async function renderScope() {
         h('summary', null, h('bdi', { class: 'ssub-code' }, code), h('span', { class: 'ssub-title' }, sub.title),
           h('span', { class: 'ssub-count' }, all ? 'خارج نطاق القسم' : exN ? `${num(exN)} من ${num(sub.reqs.length)} مستبعد` : `${num(sub.reqs.length)} متطلب`),
           pickAll),
+        subTasks.has(code) && h('div', { class: 'ssub-forms' }, h('span', { class: 'faint' }, 'نماذج المعيار الفرعي: '), taskLinks(subTasks.get(code))),
         h('ul', null, sub.reqs.map(reqRow)));
       return details;
     };
@@ -97,8 +124,8 @@ export async function renderScope() {
     mount(root,
       h('header', { class: 'scope-hero' },
         h('div', null, h('h1', null, 'نطاق المتطلبات'),
-          h('p', null, 'المتطلبات التي ليست من اختصاص القسم تُستبعد من تقديراته ومؤشراته ونماذجه وخطط تحسينه، '
-            + 'ويظهر للقسم ما يخصه فقط. القرار من صلاحية وكالة الجودة بمسوّغ موثّق.')),
+          h('p', null, 'اضغط على المعيار الفرعي لعرض متطلباته، ثم على المتطلب لفتحه وإكمال مهمته: التقدير والشواهد، أو المحضر، أو النموذج والتقرير. '
+            + 'المتطلبات التي ليست من اختصاص القسم تُستبعد بقرار وكالة الجودة بمسوّغ موثّق.')),
         h('div', { class: 'scope-pick' },
           h('label', null, 'القسم ', h('select', { onchange: e => go('scope', { dept: e.target.value }) },
             depts.map(d => h('option', { value: String(d), selected: d === dept }, deptName(d))))),

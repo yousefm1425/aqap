@@ -648,3 +648,13 @@ dialog:has(.tr-wide) { width: min(56rem, 96vw); }
 .fold-names { margin: .5rem 0; } .fold-names summary { cursor: pointer; font-weight: 600; padding: .3rem 0; }
 .fold-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); gap: .5rem .9rem; margin-top: .5rem; }
 .fold-grid label { display: flex; flex-direction: column; gap: .15rem; }
+
+/* نطاق المتطلبات كصفحة انطلاق: المتطلب رابط لإكمال مهمته */
+a.sreq-text { display: block; color: var(--ink); text-decoration: none; margin: .2rem 0; border-radius: 6px; }
+a.sreq-text:hover { color: var(--primary); text-decoration: underline; }
+.sreq-links, .ssub-forms { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .3rem; align-items: center; }
+.ssub-forms { padding: .5rem .9rem 0; }
+.task-link { font-size: .8rem; padding: .2rem .6rem; border-radius: 999px; border: 1px solid #D6E6E1; background: #F7FBF9; color: var(--primary); text-decoration: none; }
+.task-link:hover { background: var(--primary); color: #fff; border-color: var(--primary); }
+.task-link.t-form { border-color: #CFE3F0; background: #F3F8FC; color: #2B6A8F; }
+.task-link.t-minutes { border-color: #EADFC6; background: #FCF8EF; color: #8A5A12; }

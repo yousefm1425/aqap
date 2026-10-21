@@ -91,11 +91,11 @@ function shell(content) {
       h('nav', { 'aria-label': 'الأقسام الرئيسية' },
         // الصف الأول: العمل اليومي للأقسام — الصف الثاني: المتابعة والتقارير والإدارة
         h('div', { class: 'nav-row' },
-          link('workspace', 'التقديرات والشواهد'), link('minutes', 'المحاضر'), link('forms', 'الخطط والتقارير'),
-          link('plans', 'خطط التحسين'), link('quality', 'أعمال الجودة'), link('calendar', 'التقويم'), link('folders', 'مجلدات الشواهد')),
+          link('scope', 'نطاق المتطلبات'), link('workspace', 'التقديرات والشواهد'), link('minutes', 'المحاضر'), link('forms', 'الخطط والتقارير'),
+          link('plans', 'خطط التحسين'), link('quality', 'أعمال الجودة'), link('calendar', 'التقويم')),
         h('div', { class: 'nav-row' },
-          canDash() && link('dashboard', 'لوحة المؤشرات'), link('training', 'سير العملية التدريبية'), link('report', 'التقرير النهائي'), canDash() && link('college', 'تقارير الكلية'),
-          link('scope', 'نطاق المتطلبات'), link('guides', 'الأدلة'), canAdmin() && link('users', 'المستخدمون'))),
+          canDash() && link('dashboard', 'لوحة المؤشرات'), link('training', 'سير العملية التدريبية'), link('report', 'التقرير النهائي'), canDash() && link('college', 'تقارير الكلية'), link('folders', 'مجلدات الشواهد'),
+          link('guides', 'الأدلة'), canAdmin() && link('users', 'المستخدمون'))),
       h('div', { class: 'top-side' },
         state.cycles.length > 0 && cycleSelect,
         h('div', { class: 'user' },
@@ -108,7 +108,7 @@ function shell(content) {
 export async function route() {
   let { path } = parseRoute();
   if (!['workspace', 'dashboard', 'plans', 'minutes', 'forms', 'report', 'scope', 'calendar', 'quality', 'college', 'training', 'folders', 'guides', 'users'].includes(path)) {
-    path = canDash() ? 'dashboard' : 'workspace';
+    path = 'scope';                     // صفحة الانطلاق: نطاق المتطلبات ومنها إلى مهمة كل متطلب
     history.replaceState(null, '', `#/${path}`);
   }
   if (path === 'dashboard' && !canDash()) { go('workspace'); return; }
