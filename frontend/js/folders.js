@@ -19,7 +19,8 @@ const keep = v => { try { localStorage.setItem(KEY, JSON.stringify(v)); } catch 
 /** يحلل رابط المجلد الرئيسي (رابط شريط العنوان في OneDrive) إلى: الخادم، ومسار مكتبة المستندات، ومسار المجلد */
 function parseRoot(raw) {
   let u;
-  try { u = new URL(raw.trim()); } catch { throw new Error('الرابط غير صالح'); }
+  if (!raw.trim()) throw new Error('الخانة فارغة: الصق رابط المجلد الرئيسي أولاً (النص الرمادي مثال فقط).');
+  try { u = new URL(raw.trim()); } catch { throw new Error('الرابط غير صالح: انسخه كاملاً من شريط العنوان ويبدأ بـ https://'); }
   if (/^\/:[a-z]:\//i.test(u.pathname)) {
     throw new Error('هذا رابط «مشاركة» ولا يحتوي مسار المجلد. افتح المجلد الرئيسي في OneDrive وانسخ الرابط من شريط العنوان في المتصفح '
       + '(يبدأ بـ …sharepoint.com/my?id=…) — المشاركة نفسها تبقى كما هي.');
@@ -43,7 +44,7 @@ function generator(cycle, tree, reload) {
     if (!subs.some(x => x.code === r.sub_standard_code)) subs.push({ code: r.sub_standard_code, std: r.standard_code, title: r.sub_standard_title });
   }
   const input = (v, wide) => h('input', { class: 'input', value: v, style: wide ? { width: '100%' } : null });
-  const rootIn = h('input', { class: 'input', dir: 'ltr', placeholder: 'https://…-my.sharepoint.com/my?id=%2Fpersonal%2F…%2FDocuments%2FQuality%20cat2027',
+  const rootIn = h('input', { class: 'input', dir: 'ltr', placeholder: 'الصق هنا رابط المجلد الرئيسي من شريط العنوان في OneDrive',
     value: saved.root ?? '', style: { width: '100%' } });
   const stdIns = new Map([...stdMap].map(([c, t]) => [c, input(saved.std?.[c] ?? STD_DEFAULT[c] ?? `المعيار ${c} ${t}`)]));
   const subIns = new Map(subs.map(x => [x.code, input(saved.sub?.[x.code] ?? `${x.code} ${x.title}`)]));
