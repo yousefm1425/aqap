@@ -2184,3 +2184,12 @@ UPDATE requirement r SET text_ar = v.t
   ) AS v(c, t), sub_standard ss, standard s, framework f
  WHERE r.code = v.c AND ss.id = r.sub_standard_id AND s.id = ss.standard_id AND f.id = s.framework_id
    AND f.code = 'TVTC-TQ-L2' AND r.text_ar LIKE 'نص تجريبي%';
+
+-- 018_substandard_official_titles
+UPDATE sub_standard ss SET title_ar = v.new_title
+  FROM (VALUES
+    ('1-3', 'التشغيل والجداول التدريبية', 'القبول والجداول التدريبية'),
+    ('3-1', 'القياس وتقويم المتدربين', 'القياس وتقييم المتدربين'),
+    ('3-3', 'إدارة محتوى البرامج التدريبية', 'إدارة محتوى البرنامج التدريبي')
+  ) AS v(code, old_title, new_title), standard s, framework f
+ WHERE ss.code = v.code AND ss.title_ar = v.old_title AND s.id = ss.standard_id AND f.id = s.framework_id AND f.code = 'TVTC-TQ-L2';
