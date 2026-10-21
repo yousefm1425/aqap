@@ -32,7 +32,7 @@ p { margin: 0 0 .6em; text-align: justify; }
 
 .runhead { position: running(runhead); display: flex; align-items: center; justify-content: space-between; width: 174mm;
   border-bottom: 1.5pt solid var(--teal); padding-bottom: 2mm; font: 500 8.5pt "Taj", "TajL"; color: var(--teal-dk); }
-.runhead img { height: 9mm; }
+.runhead img { height: 12mm; }
 
 /* ------------------------------------------------------------ الغلاف */
 .cover { page: cover; height: 297mm; position: relative; overflow: hidden; background: #fff; }
@@ -46,7 +46,7 @@ p { margin: 0 0 .6em; text-align: justify; }
 .cover .s3 { width: 40mm; height: 40mm; background: #fff; left: 40mm; top: 110mm; opacity: .08; }
 .cover .logo-card { position: absolute; top: 20mm; right: 18mm; background: #fff; border-radius: 6mm; padding: 5mm 7mm;
   box-shadow: 0 6mm 14mm rgba(0,0,0,.18); }
-.cover .logo-card img { height: 17mm; display: block; }
+.cover .logo-card img { height: 34mm; display: block; }
 .cover .college { position: absolute; top: 50mm; right: 20mm; width: 170mm; color: #fff; font: 700 13pt "Taj", "TajL"; opacity: .95; }
 .cover .title { position: absolute; top: 80mm; right: 20mm; width: 170mm; color: #fff; }
 .cover .title .kicker { display: inline-block; background: rgba(255,255,255,.16); border: .4mm solid rgba(255,255,255,.35);
@@ -80,7 +80,7 @@ p { margin: 0 0 .6em; text-align: justify; }
 .chapter .kicker { font-size: 10pt; color: #BDEDE7; }
 .chapter h1 { font-size: 26pt; margin: 1mm 0 2mm; }
 .chapter p { color: #E3F5F2; font-size: 11pt; max-width: 140mm; text-align: right; }
-.chapter img.mini { position: absolute; left: 18mm; bottom: 8mm; height: 8mm; background: #fff; border-radius: 2mm; padding: 1.2mm 2.5mm; }
+.chapter img.mini { position: absolute; left: 18mm; bottom: 8mm; height: 13mm; background: #fff; border-radius: 2mm; padding: 1.2mm 2.5mm; }
 
 h2 { font-size: 16pt; color: var(--teal-dk); margin: 8mm 0 3mm; padding-right: 4mm; border-right: 1.6mm solid var(--teal);
   page-break-after: avoid; }
@@ -134,7 +134,7 @@ td.k { font-weight: 700; color: var(--teal-dk); white-space: nowrap; }
 .lead { font-size: 11.5pt; color: #2E3B3A; }
 .kbd { font-family: "PlexL", "Plex"; background: #F1F4F4; border: .3mm solid #D4DCDB; border-radius: 1mm; padding: 0 1.5mm; font-size: 9pt; }
 .end { text-align: center; margin-top: 14mm; color: var(--teal-dk); font: 700 12pt "Taj", "TajL"; }
-.end img { height: 14mm; display: block; margin: 0 auto 4mm; }
+.end img { height: 28mm; display: block; margin: 0 auto 4mm; }
 
 .cover .inside { position: absolute; top: 182mm; right: 20mm; width: 170mm; }
 .cover .inside h4 { margin: 0 0 4mm; font-size: 12pt; color: var(--teal-dk); }

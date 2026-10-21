@@ -28,8 +28,8 @@ p { margin: 0; }
   color: #fff; transition: background .3s, box-shadow .3s, color .3s; }
 .nav.scrolled { background: rgba(255,255,255,.9); color: var(--ink); backdrop-filter: blur(14px); box-shadow: 0 1px 0 var(--line), 0 10px 30px -20px rgba(6,43,58,.4); }
 .brand { display: flex; flex-direction: column; align-items: center; gap: .3rem; margin-inline-end: auto; }
-.org-logo { display: block; background: #fff; border-radius: 10px; padding: 5px 10px; box-shadow: 0 6px 18px -10px rgba(6,43,58,.5); }
-.org-logo img { display: block; height: 34px; width: auto; }
+.org-logo { display: block; background: #fff; border-radius: 10px; padding: 4px 8px; box-shadow: 0 6px 18px -10px rgba(6,43,58,.5); }
+.org-logo img { display: block; height: 62px; width: auto; }
 .brand > small { font-weight: 700; font-size: .78rem !important; opacity: .95 !important; display: block !important; }
 .brand b { display: block; font-size: 1.02rem; }
 .brand small { display: block; font-size: .75rem; opacity: .8; }

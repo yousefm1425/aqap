@@ -31,7 +31,7 @@ def brand(ws, title: str, info: list[tuple[str, str]], ncols: int, institution: 
             ws.cell(r, c).fill = BAND
     if LOGO.is_file():
         img = XLImage(str(LOGO))
-        img.height, img.width = 62, int(62 * 1620 / 396)
+        img.width, img.height = int(img.width * 90 / img.height), 90      # الشعار الرسمي (عمودي) بنسبته الأصلية
         ws.add_image(img, "A1")
     # الترويسة: شعار المؤسسة العامة للتدريب التقني والمهني، وأسفله اسم الكلية
     ws.row_dimensions[4].height = 26

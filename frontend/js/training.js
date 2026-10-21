@@ -274,7 +274,7 @@ function printReport(d, tAtt, tRec, e) {
     @page { size: A4; margin: 14mm 12mm; }
     body { font-family: "IBM Plex Sans Arabic", "Segoe UI", Tahoma, sans-serif; color: #1f2d2c; margin: 0; font-size: 11pt; }
     .hd { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #009C8C; padding-bottom: 8px; }
-    .hd img { height: 52px; } .hd .t { text-align: left; color: #126C66; font-weight: 700; }
+    .hd img { height: 74px; } .hd .t { text-align: left; color: #126C66; font-weight: 700; }
     .college { color: #126C66; font-weight: 700; margin-top: 4px; font-size: 10.5pt; }
     h1 { font-size: 18pt; color: #126C66; margin: 14px 0 2px; } .sub { color: #66706f; margin: 0 0 12px; }
     .kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin: 10px 0 14px; }

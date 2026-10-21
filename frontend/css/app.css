@@ -629,10 +629,11 @@ dialog:has(.tr-wide) { width: min(56rem, 96vw); }
 .topbar .org-logo img { display: block; height: 30px; width: auto; }
 .topbar .brand > span:last-child { font-size: .78rem; font-weight: 600; opacity: .95; }
 .login-brand { display: flex; flex-direction: column; align-items: center; gap: .4rem; padding-bottom: 1rem; margin-bottom: .5rem; border-bottom: 1px solid var(--line, #e3ecea); }
-.login-brand img { height: 46px; width: auto; }
+.login-brand img { height: 96px; width: auto; }
 .login-brand span { font-weight: 700; color: var(--primary); }
 .topbar .brand > .org-logo { opacity: 1; }
-.topbar .org-logo img { height: 34px; }
+.topbar .org-logo img { height: 62px; }
+.topbar .org-logo { padding: 3px 7px; }
 @media (max-width: 700px) {
   .topbar { grid-template-columns: 1fr; padding: .6rem 1rem; }
   .topbar .brand { align-items: center; }
