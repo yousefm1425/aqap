@@ -20,6 +20,10 @@ const keep = v => { try { localStorage.setItem(KEY, JSON.stringify(v)); } catch 
 function parseRoot(raw) {
   let u;
   try { u = new URL(raw.trim()); } catch { throw new Error('الرابط غير صالح'); }
+  if (/^\/:[a-z]:\//i.test(u.pathname)) {
+    throw new Error('هذا رابط «مشاركة» ولا يحتوي مسار المجلد. افتح المجلد الرئيسي في OneDrive وانسخ الرابط من شريط العنوان في المتصفح '
+      + '(يبدأ بـ …sharepoint.com/my?id=…) — المشاركة نفسها تبقى كما هي.');
+  }
   let path = u.searchParams.get('id') || decodeURIComponent(u.pathname);
   path = path.replace(/\/Forms\/[^/]+\.aspx$/i, '').replace(/\/+$/, '');
   const m = /^(\/personal\/[^/]+\/[^/]+|\/sites\/[^/]+\/[^/]+)(\/.*)?$/.exec(path);
