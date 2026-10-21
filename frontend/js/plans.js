@@ -1,3 +1,4 @@
+import { evidenceContext, folderButton, modeHint } from './evfolders.js';
 import { api } from './api.js';
 import { deptName, parseRoute, state, userScope } from './app.js';
 import { ACTION_STATUS, ACTION_TRANSITIONS, ADEQUACY, PRIORITY, RATING } from './labels.js';
@@ -248,18 +249,24 @@ export async function renderPlans() {
           h('option', { value: '' }, 'اختر شاهد التحسين من بنك القسم…'),
           evs.map(e => h('option', { value: String(e.id) }, e.title_ar)));
         pick.value = p.completion_evidence_id ? String(p.completion_evidence_id) : '';
+        const ctx = await evidenceContext(p.cycle_id ?? state.cycle.id, p.department_id);
+        const mode = ctx.settings.attachment_mode;
         const title = h('input', { type: 'text', placeholder: 'أو عنوان شاهد جديد', 'aria-label': 'عنوان شاهد جديد' });
         const file = h('input', { type: 'file', 'aria-label': 'ملف الشاهد' });
+        const url = h('input', { type: 'text', dir: 'ltr', placeholder: 'أو رابط https://…', 'aria-label': 'رابط شاهد التحسين' });
         mount(evRow, h('label', null, 'شواهد التحسين'), pick, h('div', { class: 'ev-add' },
-          h('div', { class: 'field' }, title, file),
+          h('div', { class: 'field' }, title, mode !== 'links' && file, mode !== 'files' && url,
+            h('div', { class: 'row folder-row' }, folderButton(ctx, p.requirement_code), h('span', { class: 'faint' }, modeHint(ctx)))),
           h('button', { class: 'btn', style: { alignSelf: 'end' }, onclick: () => act(async () => {
-            if (title.value.trim().length < 3 || !file.files[0]) throw new Error('اكتب عنوان الشاهد وأرفق ملفه');
-            const ev = await api('/evidence', { method: 'POST', body: { title_ar: title.value.trim(), kind: 'file', department_id: p.department_id } });
-            const form = new FormData(); form.append('file', file.files[0]);
-            await api(`/evidence/${ev.id}/versions`, { method: 'POST', form });
+            const f = mode !== 'links' ? file.files[0] : null, u = mode !== 'files' ? url.value.trim() : '';
+            if (title.value.trim().length < 3) throw new Error('اكتب عنواناً واضحاً للشاهد (3 أحرف على الأقل)');
+            if (!f && !u) throw new Error(mode === 'links' ? 'الصق رابط الشاهد من OneDrive' : 'أرفق ملفاً أو أدخل رابطاً');
+            const ev = await api('/evidence', { method: 'POST', body: { title_ar: title.value.trim(), kind: f ? 'file' : 'link',
+              url: f ? null : u, department_id: p.department_id } });
+            if (f) { const form = new FormData(); form.append('file', f); await api(`/evidence/${ev.id}/versions`, { method: 'POST', form }); }
             await api(`/actions/${p.id}`, { method: 'PATCH', body: { completion_evidence_id: ev.id } });
             bankCache.delete(p.department_id ?? 'inst');
-          }, 'رُفع شاهد التحسين') }, 'رفع')));
+          }, 'أُرفق شاهد التحسين') }, mode === 'links' ? 'إرفاق الرابط' : 'رفع')));
         evRow.append(h('div', { class: 'row end' }, h('button', { class: 'btn', onclick: () => act(() => api(`/actions/${p.id}`, {
           method: 'PATCH', body: { progress_pct: Number(progress.value), completion_evidence_id: pick.value ? Number(pick.value) : null } }),
           'حُفظ التقدم') }, 'حفظ التقدم')));
