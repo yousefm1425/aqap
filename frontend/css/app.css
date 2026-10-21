@@ -641,3 +641,6 @@ dialog:has(.tr-wide) { width: min(56rem, 96vw); }
   .topbar .top-side select { max-width: 60vw; }
   .topbar nav { grid-row: auto; }
 }
+
+/* الشعار بلا خلفية: نسخة فاتحة على الشريط الأخضر */
+.topbar .org-logo { background: none; padding: 0; border-radius: 0; box-shadow: none; }

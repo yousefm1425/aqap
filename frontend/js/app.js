@@ -86,7 +86,7 @@ function shell(content) {
   return [
     h('header', { class: 'topbar' },
       h('a', { class: 'brand', href: 'home.html', title: 'منصة الجودة والاعتماد — الصفحة الرئيسية' },
-        h('span', { class: 'org-logo' }, h('img', { src: 'img/tvtc-logo.png', alt: 'المؤسسة العامة للتدريب التقني والمهني' })),
+        h('span', { class: 'org-logo' }, h('img', { src: 'img/tvtc-logo-light.png', alt: 'المؤسسة العامة للتدريب التقني والمهني' })),
         h('span', null, state.me.institution_name ?? 'الكلية التقنية التطبيقية بينبع')),
       h('nav', { 'aria-label': 'الأقسام الرئيسية' },
         // الصف الأول: العمل اليومي للأقسام — الصف الثاني: المتابعة والتقارير والإدارة
