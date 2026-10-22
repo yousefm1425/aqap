@@ -1,6 +1,6 @@
 import { api, apiOpen } from './api.js';
 import { deptName, parseRoute, state, userScope } from './app.js';
-import { compute, fmt, isEmpty, mergedRows, tablePhase } from './formcalc.js';
+import { compute, fmt, isEmpty, mergedRows, parsePastedTable, tablePhase } from './formcalc.js';
 import { dateTime, h, hasRole, mount, num, pct, promptText, toast } from './ui.js';
 // نماذج أعمال الاختبارات ترتبط بمعيار فرعي (الرمز «3-1/...») لا بمتطلب واحد
 const reqLabel = x => x.requirement_code.includes('/')
@@ -216,8 +216,63 @@ export async function renderForms() {
         const b = h('b'); live.set(`sum:${s.key}:${m.key}`, { el: b, fmt: m.format });
         return h('span', null, b, ` ${m.label}`);
       }));
+      const canImport = rowsEditable || (fixed && s.columns.some(c => editableCol(s, c)));
+      const importRows = async () => {
+        const r = await promptText({
+          title: `استيراد صفوف إلى «${s.title}»`,
+          label: 'الصق الجدول مع صف العناوين كما نسخته من Excel أو من «تقارير الجودة» في منصة الإرشاد',
+          confirm: 'استيراد', choiceLabel: 'طريقة الاستيراد',
+          choices: fixed ? null : { append: 'إضافة إلى الصفوف الحالية', replace: 'استبدال الصفوف الحالية' } });
+        if (!r) return;
+        const text = fixed ? r : r.text;
+        let parsed;
+        try { parsed = parsePastedTable(text, s.columns.filter(c => c.fixed || editableCol(s, c))); }
+        catch (ex) { toast(ex.message, 'error'); return; }
+        const { rows: pasted, rejected, ignored } = parsed;
+        let added = 0, skipped = 0;
+        if (fixed) {                                   // صفوف ثابتة (مثل المؤشرات): يُطابق الصف بقيمه الثابتة
+          const keys = s.columns.filter(c => c.fixed).map(c => c.key);
+          const rs = mergedRows(s, plan, follow);
+          for (const p of pasted) {
+            const ks = keys.filter(k => p[k] != null);
+            const row = ks.length && rs.find(x => ks.every(k => String(x[k]).trim() === String(p[k]).trim()));
+            if (!row) { skipped += 1; continue; }
+            s.columns.filter(c => editableCol(s, c) && p[c.key] != null).forEach(c => setCell(s, row, c, p[c.key]));
+            added += 1;
+          }
+        } else {
+          const room = (s.max_rows ?? 100) - (r.choice === 'replace' ? 0 : mergedRows(s, plan, follow).length);
+          const take = pasted.slice(0, Math.max(0, room));
+          skipped = pasted.length - take.length;
+          const pick = (p, phase) => Object.fromEntries(s.columns.filter(c => editableCol(s, c) && (phase == null || (c.phase ?? 'plan') === phase) && p[c.key] != null).map(c => [c.key, p[c.key]]));
+          if (tablePhase(s) === 'follow') {
+            if (r.choice === 'replace') follow[s.key] = [];
+            follow[s.key] ??= [];
+            take.forEach(p => follow[s.key].push({ id: newId(), ...pick(p) }));
+          } else {
+            if (r.choice === 'replace') { plan[s.key] = []; follow[s.key] = {}; }
+            plan[s.key] ??= [];
+            take.forEach(p => {
+              const id = newId();
+              plan[s.key].push({ id, ...pick(p, 'plan') });
+              const fu = pick(p, 'follow');
+              if (Object.keys(fu).length) { follow[s.key] ??= {}; follow[s.key][id] = fu; }
+            });
+          }
+          added = take.length;
+          markDirty();
+        }
+        draw();
+        const notes = [`استُورد ${num(added)} صف`];
+        if (skipped) notes.push(fixed ? `${num(skipped)} لم يُطابق صفاً في الجدول` : `${num(skipped)} تجاوز الحد الأعلى (${s.max_rows ?? 100})`);
+        if (rejected.length) notes.push(`${num(rejected.length)} قيمة غير مقبولة تُركت فارغة`);
+        if (ignored.length) notes.push(`أعمدة لا تخص الجدول: ${ignored.slice(0, 3).join('، ')}`);
+        toast(`${notes.join(' · ')}. راجع ثم احفظ.`, rejected.length || skipped ? 'error' : undefined);
+      };
       return h('section', null,
-        h('h2', null, s.title), s.help && h('p', { class: 'faint' }, s.help),
+        h('div', { class: 'row' }, h('h2', null, s.title),
+          canImport && h('button', { class: 'btn small', type: 'button', onclick: importRows }, 'استيراد صفوف ملصوقة')),
+        s.help && h('p', { class: 'faint' }, s.help),
         h('div', { class: 'table-scroll' }, h('table', { class: 'data form-table' },
           h('thead', null, groupRow(s.columns), h('tr', null, h('th', null, 'م'), s.columns.map(c => h('th', { class: c.type === 'computed' ? 'computed' : null }, c.label)),
             rowsEditable && h('th'))),
