@@ -16,6 +16,7 @@ import re
 import uuid
 from typing import Any
 
+SRC_RE = re.compile(r"^[a-z0-9_]{1,40}:[A-Za-z0-9_-]{1,40}$")
 ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,24}$")
 MAX_TEXT = 4000
 DONE, PARTIAL, NOT_DONE = "مُنفذ", "مُنفذ جزئي", "لم يُنفذ"
@@ -98,6 +99,8 @@ def _clean_rows(section: dict, rows: Any, phase: str, title: str) -> list[dict]:
             rid = uuid.uuid4().hex[:10]
         seen.add(rid)
         clean = {"id": rid}
+        if isinstance(r.get("_src"), str) and SRC_RE.match(r["_src"]):
+            clean["_src"] = r["_src"]                     # صف خطة تحسين مولّد من مهمة غير منفذة
         for c in cols:
             clean[c["key"]] = _clean_value(c, r.get(c["key"]), f"«{title}» صف {i}")
         out.append(clean)
@@ -157,7 +160,62 @@ def clean_follow(schema: dict, plan: dict, follow: Any) -> dict:
                 out[k] = {c["key"]: _clean_value(c, vals.get(c["key"]), f"«{title}»") for c in fields}
         elif t == "text" and s.get("phase") == "follow":
             out[k] = _clean_value({"type": "longtext", "label": title}, follow.get(k), f"«{title}»")
+    sync_improvements(schema, plan, out)
     return out
+
+
+# ---------------------------------------------------------------------------
+# خطط التحسين التلقائية: كل مهمة «لم يُنفذ» أو «مُنفذ جزئي» تظهر في «التوصيات وخطط التحسين»
+# ---------------------------------------------------------------------------
+NEEDS_PLAN = (NOT_DONE, PARTIAL)          # حالتا التنفيذ اللتان تولّدان خطة تحسين
+LABEL_KEYS = ("task", "initiative", "item", "activity", "title", "program", "name", "course", "workshop", "subject")
+_AUTO_FILLED = ("action", "date", "owner", "evidence", "status", "obstacles", "solutions")
+
+
+def _status_col(section: dict) -> dict | None:
+    return next((c for c in section.get("columns", []) if c["type"] == "select" and set(NEEDS_PLAN) <= set(c.get("options", []))), None)
+
+
+def _label(section: dict, row: dict) -> str:
+    cols = [c for c in section["columns"] if c["type"] in ("longtext", "text") and c["key"] not in ("owner", "date", "mechanism")]
+    for k in LABEL_KEYS + tuple(c["key"] for c in cols):
+        v = row.get(k)
+        if not _empty(v):
+            return " ".join(str(v).split())[:220]
+    return "مهمة بلا عنوان"
+
+
+def sync_improvements(schema: dict, plan: dict, follow: dict) -> None:
+    imp = next((s for s in schema["sections"] if s["key"] == "improvements"), None)
+    if imp is None:
+        return
+    pending: dict[str, str] = {}                                   # _src → نص التوصية
+    for s in schema["sections"]:
+        if s["type"] != "table" or s["key"] == "improvements":
+            continue
+        sc = _status_col(s)
+        if sc is None:
+            continue
+        for row in merged_rows(s, plan, follow):
+            st = row.get(sc["key"])
+            if st in NEEDS_PLAN:
+                pending[f"{s['key']}:{row['id']}"] = f"استكمال تنفيذ ({st}): {_label(s, row)}"
+    rows = follow.get("improvements") or []
+    have = {r.get("_src") for r in rows if r.get("_src")}
+    kept = []
+    for r in rows:
+        src = r.get("_src")
+        untouched = all(_empty(r.get(k)) for k in _AUTO_FILLED)
+        if src and src not in pending and untouched:
+            continue                                               # نُفذت المهمة ولم يُعمل على التوصية: تُزال
+        if src and src in pending and untouched:
+            r["recommendation"] = pending[src]                     # تحديث النص إن تغيّرت الحالة أو المهمة
+        kept.append(r)
+    for src, text in pending.items():
+        if src not in have and len(kept) < imp.get("max_rows", 30):
+            kept.append({"id": uuid.uuid4().hex[:10], "_src": src, "recommendation": text,
+                         **{c["key"]: None for c in input_cols(imp) if c["key"] != "recommendation"}})
+    follow["improvements"] = kept
 
 
 def empty_plan(schema: dict) -> dict:

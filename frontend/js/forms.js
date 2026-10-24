@@ -283,6 +283,15 @@ export async function renderForms() {
       if (followEditable) body.follow_data = follow;
       const r = await api(`/forms/${f.id}`, { method: 'PUT', body });
       dirty = false;
+      // المهام «لم يُنفذ / مُنفذ جزئي» تُضاف تلقائياً إلى «التوصيات وخطط التحسين» عند الحفظ
+      const auto = rows => (rows ?? []).filter(x => x._src).map(x => `${x._src}|${x.recommendation}`).join(',');
+      const before = auto(follow.improvements), after = auto(r.follow_data?.improvements);
+      if (before !== after) {
+        const added = (r.follow_data.improvements ?? []).filter(x => x._src).length - (follow.improvements ?? []).filter(x => x._src).length;
+        toast(added > 0 ? `أُضيفت ${num(added)} خطة تحسين تلقائياً للمهام غير المنفذة أو المنفذة جزئياً` : 'حُدّثت خطط التحسين التلقائية حسب حالة التنفيذ');
+        await renderRecord(r);
+        return r;
+      }
       if (!quiet) toast('حُفظ النموذج');
       return r;
     };

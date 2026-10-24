@@ -128,7 +128,9 @@ def test_executive_plan_lifecycle(client):
     d = save(coord, follow_data={**follow, "improvements": [
         {"recommendation": "ورش عمل لبناء الجداول", "action": "حضور الورش", "owner": "رئيس القسم", "status": "مُنفذ"},
         {"recommendation": "هاكثون تقني", "status": "مُنفذ جزئي"}, {"recommendation": "توصية ثالثة"}]}).json()
-    assert round(d["computed"]["improvement_pct"], 4) == 0.5                        # (1 + 0.5 + 0) ÷ 3 = K14 في الملف
+    # المهمتان t2 (جزئي) و t3 (لم يُنفذ) أضيفتا تلقائياً توصيتين: (1 + 0.5 + 0 + 0 + 0) ÷ 5
+    assert sum(1 for r in d["follow_data"]["improvements"] if r.get("_src")) == 2
+    assert round(d["computed"]["improvement_pct"], 4) == 0.3
     assert save(coord, follow_data={"improvements": [{"status": "مُنفذ"}]}).status_code == 200   # المسودة تقبل النقص
 
     up = client.post(f"{API}/forms/{fid}/attachments/upload", headers=coord, data={"title_ar": "تقرير رايات"},
@@ -374,3 +376,29 @@ def test_college_reports_from_department_forms(client):
     x = client.get(f"{API}/cycles/1/college-reports/exam_readiness/xlsx?f=الفصلي الأول", headers=dean)
     assert x.status_code == 200 and x.content[:2] == b"PK"
     assert client.get(f"{API}/cycles/1/college-reports/nope", headers=dean).status_code == 404
+
+
+def test_auto_improvements_from_not_done_tasks():
+    """كل مهمة «لم يُنفذ» أو «مُنفذ جزئي» تظهر تلقائياً في «التوصيات وخطط التحسين»، وتُزال إذا نُفذت ولم يُعمل عليها."""
+    from app.form_templates import TEMPLATES
+    from app.forms_engine import _status_col, clean_follow, merged_rows
+    tpl = next(t for t in TEMPLATES if any(s["type"] == "table" and s["key"] != "improvements" and _status_col(s)
+                                           and s.get("phase") != "follow" for s in t["schema"]["sections"]))
+    schema = tpl["schema"]
+    sec = next(s for s in schema["sections"] if s["type"] == "table" and s["key"] != "improvements" and _status_col(s) and s.get("phase") != "follow")
+    st = _status_col(sec)["key"]
+    plan = {sec["key"]: [{"id": f"r{i}", **{c["key"]: (f"مهمة {i}" if c["type"] in ("text", "longtext") else
+                                                    (c["options"][0] if c["type"] == "select" else None))
+                                           for c in sec["columns"] if c.get("phase") == "plan" and c["type"] != "computed"}} for i in (1, 2, 3)]}
+    follow = clean_follow(schema, plan, {sec["key"]: {"r1": {st: "مُنفذ"}, "r2": {st: "لم يُنفذ"}, "r3": {st: "مُنفذ جزئي"}}})
+    auto = [r for r in follow["improvements"] if r.get("_src")]
+    assert len(auto) == 2 and all(r["recommendation"].startswith("استكمال تنفيذ") for r in auto)
+    assert any("لم يُنفذ" in r["recommendation"] for r in auto)
+    # إعادة الحفظ لا تكرر، والعمل على التوصية يبقيها، وتنفيذ مهمة لم يُعمل على توصيتها يزيلها
+    follow["improvements"][0]["action"] = "إجراء تصحيحي"
+    keep_src = follow["improvements"][0]["_src"]
+    follow[sec["key"]]["r2"][st] = "مُنفذ"
+    follow[sec["key"]]["r3"][st] = "مُنفذ"
+    again = clean_follow(schema, plan, follow)
+    srcs = [r["_src"] for r in again["improvements"] if r.get("_src")]
+    assert srcs == [keep_src]
