@@ -63,7 +63,7 @@ async def _own_user(conn, user: CurrentUser, user_id: int) -> dict:
 
 # ---------------------------------------------------------------- المستخدمون
 @router.get("/users")
-async def list_users(user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+async def list_users(user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     _manager(user)
     cur = await conn.execute(
         """SELECT u.id, u.email, u.full_name_ar, u.is_active, u.created_at,
@@ -81,7 +81,7 @@ async def list_users(user: CurrentUser = Depends(current_user), conn: AsyncConne
 
 
 @router.post("/users", status_code=201)
-async def create_user(body: UserIn, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+async def create_user(body: UserIn, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     _manager(user)
     await _actor(conn, user)
     cur = await conn.execute(
@@ -92,7 +92,7 @@ async def create_user(body: UserIn, user: CurrentUser = Depends(current_user), c
 
 @router.patch("/users/{user_id}")
 async def patch_user(user_id: int, body: UserPatch, user: CurrentUser = Depends(current_user),
-                     conn: AsyncConnection = Depends(get_conn)):
+                     conn: AsyncConnection = Depends(get_conn, scope="function")):
     _manager(user)
     await _own_user(conn, user, user_id)
     if body.is_active is False and user_id == user.id:
@@ -107,7 +107,7 @@ async def patch_user(user_id: int, body: UserPatch, user: CurrentUser = Depends(
 
 @router.post("/users/{user_id}/roles", status_code=201)
 async def add_role(user_id: int, body: RoleIn, user: CurrentUser = Depends(current_user),
-                   conn: AsyncConnection = Depends(get_conn)):
+                   conn: AsyncConnection = Depends(get_conn, scope="function")):
     _manager(user)
     await _own_user(conn, user, user_id)
     if body.role == "system_admin" and not user.has("system_admin"):
@@ -130,7 +130,7 @@ async def add_role(user_id: int, body: RoleIn, user: CurrentUser = Depends(curre
 
 
 @router.delete("/roles/{role_id}")
-async def remove_role(role_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+async def remove_role(role_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     _manager(user)
     cur = await conn.execute(
         """SELECT r.* FROM user_role r JOIN app_user u ON u.id = r.user_id
@@ -149,7 +149,7 @@ async def remove_role(role_id: int, user: CurrentUser = Depends(current_user), c
 
 # ---------------------------------------------------------------- الأدلة
 @router.get("/guides")
-async def list_guides(user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+async def list_guides(user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     cur = await conn.execute(
         """SELECT g.id, g.title_ar, g.description_ar, g.category, g.url, g.sort_order, g.created_at, u.full_name_ar AS created_by_name
              FROM guide_document g LEFT JOIN app_user u ON u.id = g.created_by
@@ -158,7 +158,7 @@ async def list_guides(user: CurrentUser = Depends(current_user), conn: AsyncConn
 
 
 @router.post("/guides", status_code=201)
-async def add_guide(body: GuideIn, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+async def add_guide(body: GuideIn, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     _manager(user)
     await _actor(conn, user)
     cur = await conn.execute(
@@ -170,7 +170,7 @@ async def add_guide(body: GuideIn, user: CurrentUser = Depends(current_user), co
 
 
 @router.delete("/guides/{guide_id}")
-async def delete_guide(guide_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+async def delete_guide(guide_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     _manager(user)
     await _actor(conn, user)
     cur = await conn.execute("DELETE FROM guide_document WHERE id = %s AND institution_id = %s", (guide_id, user.institution_id))

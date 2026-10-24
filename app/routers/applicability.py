@@ -31,7 +31,7 @@ async def _dept(conn, user: CurrentUser, department_id: int) -> dict:
 
 @router.get("/departments/{department_id}/applicability")
 async def applicability(department_id: int, user: CurrentUser = Depends(current_user),
-                        conn: AsyncConnection = Depends(get_conn)):
+                        conn: AsyncConnection = Depends(get_conn, scope="function")):
     """شجرة متطلبات الإطار الفعّال مع حالة انطباق كل متطلب على القسم."""
     d = await _dept(conn, user, department_id)
     cur = await conn.execute(
@@ -54,7 +54,7 @@ async def applicability(department_id: int, user: CurrentUser = Depends(current_
 
 @router.post("/departments/{department_id}/applicability/exclusions", status_code=201)
 async def exclude(department_id: int, body: ExclusionIn, user: CurrentUser = Depends(current_user),
-                  conn: AsyncConnection = Depends(get_conn)):
+                  conn: AsyncConnection = Depends(get_conn, scope="function")):
     if not user.has(*MANAGERS):
         raise forbid("تحديد نطاق المتطلبات من صلاحية وكيل الجودة")
     await _dept(conn, user, department_id)
@@ -81,7 +81,7 @@ async def exclude(department_id: int, body: ExclusionIn, user: CurrentUser = Dep
 
 @router.delete("/departments/{department_id}/applicability/exclusions/{requirement_id}")
 async def restore(department_id: int, requirement_id: int, user: CurrentUser = Depends(current_user),
-                  conn: AsyncConnection = Depends(get_conn)):
+                  conn: AsyncConnection = Depends(get_conn, scope="function")):
     """إعادة المتطلب لنطاق القسم (إلغاء القرار مع بقائه في السجل)."""
     if not user.has(*MANAGERS):
         raise forbid("تحديد نطاق المتطلبات من صلاحية وكيل الجودة")

@@ -1,4 +1,4 @@
-fastapi>=0.115
+fastapi>=0.121  # Depends(scope="function"): commit before the response is sent
 uvicorn[standard]>=0.30
 psycopg[binary,pool]>=3.2
 pydantic-settings>=2.4

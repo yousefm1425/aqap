@@ -103,6 +103,7 @@ async def current_user(creds: HTTPAuthorizationCredentials | None = Depends(_bea
     return CurrentUser(**row, grants=grants)
 
 
+# scope="function" عند الاستخدام: يُثبَّت الحفظ (commit) قبل إرسال الرد، فلا يقرأ طلب لاحق بيانات لم تُحفظ بعد
 async def get_conn(user: CurrentUser = Depends(current_user)) -> AsyncIterator[AsyncConnection]:
     async with db.transaction(user.id) as conn:
         yield conn

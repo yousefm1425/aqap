@@ -139,7 +139,7 @@ def _bad(ex: FormError) -> HTTPException:
 # ---------------------------------------------------------------------------
 @router.get("/cycles/{cycle_id}/forms/templates")
 async def templates(cycle_id: int, department_id: int | None = None, user: CurrentUser = Depends(current_user),
-                    conn: AsyncConnection = Depends(get_conn)):
+                    conn: AsyncConnection = Depends(get_conn, scope="function")):
     """قوالب النماذج لإطار الدورة مع حالة نموذج القسم (إن وُجد) ضمن نطاق المستخدم."""
     cycle = await load_cycle(conn, user, cycle_id)
     rows = await _templates(conn, cycle)
@@ -161,7 +161,7 @@ async def templates(cycle_id: int, department_id: int | None = None, user: Curre
 
 @router.post("/cycles/{cycle_id}/forms", status_code=201)
 async def create_form(cycle_id: int, body: FormCreate, user: CurrentUser = Depends(current_user),
-                      conn: AsyncConnection = Depends(get_conn)):
+                      conn: AsyncConnection = Depends(get_conn, scope="function")):
     cycle = await load_cycle(conn, user, cycle_id)
     if cycle["status"] not in ACTIVE_CYCLE:
         raise forbid("الدورة ليست مفتوحة")
@@ -184,7 +184,7 @@ async def create_form(cycle_id: int, body: FormCreate, user: CurrentUser = Depen
 
 
 @router.get("/forms/{form_id}")
-async def get_form(form_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+async def get_form(form_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     await _load(conn, user, form_id)
     return await _full(conn, form_id)
 
@@ -217,7 +217,7 @@ def _urls(schema: dict, data) -> set[str]:
 
 @router.put("/forms/{form_id}")
 async def save_form(form_id: int, body: FormSave, user: CurrentUser = Depends(current_user),
-                    conn: AsyncConnection = Depends(get_conn)):
+                    conn: AsyncConnection = Depends(get_conn, scope="function")):
     """حفظ التخطيط (المسودة/بعد الإعادة) و/أو المتابعة (في أي وقت عدا انتظار الاعتماد) — القواعد مفروضة في القاعدة."""
     f = await _load(conn, user, form_id, lock=True)
     if not _is_dept(user, f):
@@ -245,7 +245,7 @@ async def save_form(form_id: int, body: FormSave, user: CurrentUser = Depends(cu
 
 
 @router.delete("/forms/{form_id}", status_code=204)
-async def delete_form(form_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+async def delete_form(form_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     f = await _load(conn, user, form_id, lock=True)
     if not _is_dept(user, f):
         raise forbid()
@@ -290,7 +290,7 @@ async def _archive(conn: AsyncConnection, user: CurrentUser, form_id: int) -> di
 
 @router.post("/forms/{form_id}/transition")
 async def transition(form_id: int, body: MinutesTransitionIn, user: CurrentUser = Depends(current_user),
-                     conn: AsyncConnection = Depends(get_conn)):
+                     conn: AsyncConnection = Depends(get_conn, scope="function")):
     f = await _load(conn, user, form_id)
     if body.to_status == "submitted" and f["status"] in ("draft", "returned"):
         doc = await _full(conn, form_id)
@@ -304,7 +304,7 @@ async def transition(form_id: int, body: MinutesTransitionIn, user: CurrentUser 
 
 
 @router.post("/forms/{form_id}/archive")
-async def archive_follow_up(form_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+async def archive_follow_up(form_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     """نسخة مؤرشفة جديدة من النموذج المعتمد تتضمن آخر المتابعة."""
     f = await _load(conn, user, form_id)
     if f["status"] != "approved":
@@ -315,7 +315,7 @@ async def archive_follow_up(form_id: int, user: CurrentUser = Depends(current_us
 
 
 @router.get("/forms/{form_id}/pdf")
-async def form_pdf(form_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+async def form_pdf(form_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     await _load(conn, user, form_id)
     doc = await _full(conn, form_id)
     pdf = await run_in_threadpool(render_pdf, doc)
@@ -324,7 +324,7 @@ async def form_pdf(form_id: int, user: CurrentUser = Depends(current_user), conn
 
 
 @router.get("/forms/{form_id}/xlsx")
-async def form_xlsx(form_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+async def form_xlsx(form_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     """نسخة Excel بهوية المؤسسة — للتقارير ذات الجداول والأرقام فقط (الصيغ حية لإعادة الحساب والرسوم البيانية)."""
     await _load(conn, user, form_id)
     doc = await _full(conn, form_id)
@@ -366,7 +366,7 @@ async def _attach(conn: AsyncConnection, user: CurrentUser, f: dict, evidence_id
 
 @router.post("/forms/{form_id}/attachments", status_code=201)
 async def attach(form_id: int, body: MinutesAttachIn, user: CurrentUser = Depends(current_user),
-                 conn: AsyncConnection = Depends(get_conn)):
+                 conn: AsyncConnection = Depends(get_conn, scope="function")):
     f = await _attach_target(conn, user, form_id)
     if body.evidence_id is not None:
         cur = await conn.execute("SELECT id FROM evidence WHERE id = %s AND institution_id = %s AND NOT is_archived",
@@ -387,7 +387,7 @@ async def attach(form_id: int, body: MinutesAttachIn, user: CurrentUser = Depend
 @router.post("/forms/{form_id}/attachments/upload", status_code=201)
 async def attach_upload(form_id: int, file: UploadFile = File(...), title_ar: str | None = Form(None),
                         note: str | None = Form(None), user: CurrentUser = Depends(current_user),
-                        conn: AsyncConnection = Depends(get_conn)):
+                        conn: AsyncConnection = Depends(get_conn, scope="function")):
     f = await _attach_target(conn, user, form_id)
     if f["status"] == "submitted":
         raise forbid("النموذج بانتظار قرار رئيس القسم؛ أضف الشواهد بعد الاعتماد أو الإعادة")
@@ -417,7 +417,7 @@ async def attach_upload(form_id: int, file: UploadFile = File(...), title_ar: st
 
 @router.delete("/forms/{form_id}/attachments/{evidence_id}", status_code=204)
 async def detach(form_id: int, evidence_id: int, user: CurrentUser = Depends(current_user),
-                 conn: AsyncConnection = Depends(get_conn)):
+                 conn: AsyncConnection = Depends(get_conn, scope="function")):
     f = await _attach_target(conn, user, form_id)
     cur = await conn.execute("DELETE FROM form_attachment WHERE form_id = %s AND evidence_id = %s RETURNING id",
                              (f["id"], evidence_id))

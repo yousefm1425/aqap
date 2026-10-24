@@ -18,4 +18,5 @@ RUN useradd --create-home --uid 10001 aqap && chown -R aqap /srv
 USER aqap
 EXPOSE 8000
 # يهيئ القاعدة (المخطط أو الترحيلات) ثم يشغّل الخادم؛ Render يحدد المنفذ في PORT
-CMD ["sh", "-c", "python scripts/init_db.py && exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips=*"]
+# في وضع التطوير فقط: تجربة قسم الاتصالات الكاملة تعمل مرة واحدة في الخلفية عبر الـ API (scripts/demo_tc_run.py)
+CMD ["sh", "-c", "python scripts/init_db.py && { [ \"$AQAP_ENV\" = dev ] && (python scripts/demo_tc_run.py --auto --base http://127.0.0.1:${PORT:-8000} > /tmp/demo_tc.log 2>&1 &) ; true; } && exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips=*"]

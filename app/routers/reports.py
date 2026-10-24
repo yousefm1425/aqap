@@ -17,7 +17,7 @@ async def _rows(conn, user, cycle_id, query, **extra):
 
 @router.get("/departments")
 async def department_compliance(cycle_id: int, user: CurrentUser = Depends(current_user),
-                                conn: AsyncConnection = Depends(get_conn)):
+                                conn: AsyncConnection = Depends(get_conn, scope="function")):
     """ملخص الأقسام: نسب الاستيفاء الذاتية والخارجية والفعلية + أعداد التقرير النهائي."""
     return await _rows(conn, user, cycle_id,
                        f"SELECT * FROM v_department_compliance WHERE cycle_id = %(cycle)s AND {_SCOPE} "
@@ -26,7 +26,7 @@ async def department_compliance(cycle_id: int, user: CurrentUser = Depends(curre
 
 @router.get("/standards")
 async def standard_compliance(cycle_id: int, department_id: int | None = None,
-                              user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+                              user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     return await _rows(conn, user, cycle_id,
                        f"""SELECT v.cycle_id, v.department_id, v.standard_id, v.standard_code, s.title_ar AS standard_title,
                                   v.total_requirements, v.unrated_count,
@@ -40,7 +40,7 @@ async def standard_compliance(cycle_id: int, department_id: int | None = None,
 
 @router.get("/sub-standards")
 async def substandard_compliance(cycle_id: int, department_id: int | None = None,
-                                 user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+                                 user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     return await _rows(conn, user, cycle_id,
                        f"""SELECT cycle_id, department_id, standard_code, sub_standard_code, sub_standard_title,
                                   total_requirements, met_count, partial_count, not_met_count, na_count, unrated_count,
@@ -53,7 +53,7 @@ async def substandard_compliance(cycle_id: int, department_id: int | None = None
 
 @router.get("/ranking")
 async def ranking(cycle_id: int, limit: int = 3, user: CurrentUser = Depends(current_user),
-                  conn: AsyncConnection = Depends(get_conn)):
+                  conn: AsyncConnection = Depends(get_conn, scope="function")):
     """أفضل وأضعف المعايير الفرعية على مستوى المنشأة (للتقرير النهائي)."""
     await load_cycle(conn, user, cycle_id)
     cur = await conn.execute(
@@ -65,14 +65,14 @@ async def ranking(cycle_id: int, limit: int = 3, user: CurrentUser = Depends(cur
 
 @router.get("/gaps")
 async def self_external_gaps(cycle_id: int, user: CurrentUser = Depends(current_user),
-                             conn: AsyncConnection = Depends(get_conn)):
+                             conn: AsyncConnection = Depends(get_conn, scope="function")):
     return await _rows(conn, user, cycle_id,
                        f"SELECT * FROM v_self_external_gap WHERE cycle_id = %(cycle)s AND {_SCOPE} ORDER BY department_id NULLS FIRST, requirement_code")
 
 
 @router.get("/missing-evidence")
 async def missing_evidence(cycle_id: int, user: CurrentUser = Depends(current_user),
-                           conn: AsyncConnection = Depends(get_conn)):
+                           conn: AsyncConnection = Depends(get_conn, scope="function")):
     return await _rows(conn, user, cycle_id,
                        f"SELECT * FROM v_missing_evidence WHERE cycle_id = %(cycle)s AND {_SCOPE} "
                        "ORDER BY department_id NULLS FIRST, requirement_code")
@@ -80,7 +80,7 @@ async def missing_evidence(cycle_id: int, user: CurrentUser = Depends(current_us
 
 @router.get("/improvement")
 async def improvement_summary(cycle_id: int, user: CurrentUser = Depends(current_user),
-                              conn: AsyncConnection = Depends(get_conn)):
+                              conn: AsyncConnection = Depends(get_conn, scope="function")):
     """ملخص خطط التحسين لكل قسم: في القسم، قيد المراجعة، قيد التنفيذ، بانتظار التحقق، مغلقة، متأخرة."""
     return await _rows(conn, user, cycle_id,
                        f"""SELECT s.*, COALESCE(d.name_ar, 'متطلبات المنشأة') AS department_name
@@ -90,7 +90,7 @@ async def improvement_summary(cycle_id: int, user: CurrentUser = Depends(current
 
 
 @router.get("/pass-level")
-async def pass_level(cycle_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+async def pass_level(cycle_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     """مستوى الاجتياز لكل معيار رئيسي وفق صيغة النموذج: لا يقل أي قسم عن 89.5% في التقييم الخارجي."""
     await load_cycle(conn, user, cycle_id)
     cur = await conn.execute(
@@ -103,7 +103,7 @@ async def pass_level(cycle_id: int, user: CurrentUser = Depends(current_user), c
 
 
 @router.get("/invalid-na")
-async def invalid_na(cycle_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+async def invalid_na(cycle_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     """تقديرات «لا ينطبق» لا يقبلها شرط النجمة في النموذج (تُحسب «غير متحقق»)."""
     return await _rows(conn, user, cycle_id,
                        f"SELECT * FROM v_invalid_na WHERE cycle_id = %(cycle)s AND {_SCOPE} ORDER BY department_id, requirement_code")
@@ -111,7 +111,7 @@ async def invalid_na(cycle_id: int, user: CurrentUser = Depends(current_user), c
 
 @router.get("/final-plans")
 async def final_plans(cycle_id: int, department_id: int | None = None,
-                      user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+                      user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     """المتطلبات التي تستلزم خطة تحسين في التقرير النهائي، مع سبب الملاحظة:
     غير منفذ (غير متحقق/جزئي)، أو الشاهد غير متوفر/غير كافٍ، أو خطة التحسين غير داعمة."""
     return await _rows(conn, user, cycle_id, f"""

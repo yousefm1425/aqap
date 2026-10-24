@@ -112,7 +112,7 @@ async def _actor(conn, user):
 
 
 @router.post("/cycles/{cycle_id}/attendance", status_code=201)
-async def upload(cycle_id: int, body: UploadIn, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+async def upload(cycle_id: int, body: UploadIn, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     cycle = await load_cycle(conn, user, cycle_id)
     _manager(user)
     await _actor(conn, user)
@@ -155,7 +155,7 @@ async def upload(cycle_id: int, body: UploadIn, user: CurrentUser = Depends(curr
 
 
 @router.delete("/cycles/{cycle_id}/attendance/{week_no}")
-async def delete_week(cycle_id: int, week_no: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+async def delete_week(cycle_id: int, week_no: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     await load_cycle(conn, user, cycle_id)
     _manager(user)
     await _actor(conn, user)
@@ -166,7 +166,7 @@ async def delete_week(cycle_id: int, week_no: int, user: CurrentUser = Depends(c
 
 
 @router.get("/attendance/trainers")
-async def trainers(user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+async def trainers(user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     _manager(user)
     cur = await conn.execute(
         """SELECT t.trainer_no, t.trainer_name, t.department_id, t.confirmed,
@@ -176,7 +176,7 @@ async def trainers(user: CurrentUser = Depends(current_user), conn: AsyncConnect
 
 
 @router.put("/attendance/trainers")
-async def map_trainers(body: MapIn, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+async def map_trainers(body: MapIn, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     _manager(user)
     n = 0
     for it in body.items:
@@ -193,7 +193,7 @@ class DeptIn(BaseModel):
 
 
 @router.post("/attendance/departments", status_code=201)
-async def add_department(body: DeptIn, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+async def add_department(body: DeptIn, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     """إضافة قسم تدريبي غير موجود (مثل الاتصالات أو التقنية الإلكترونية) ثم إعادة اقتراح ربط غير المؤكَّدين."""
     _manager(user)
     await _actor(conn, user)
@@ -229,7 +229,7 @@ def _agg(rows: list[dict]) -> dict:
 
 @router.get("/cycles/{cycle_id}/attendance")
 async def summary(cycle_id: int, week: int | None = None, user: CurrentUser = Depends(current_user),
-                  conn: AsyncConnection = Depends(get_conn)):
+                  conn: AsyncConnection = Depends(get_conn, scope="function")):
     cycle = await load_cycle(conn, user, cycle_id)
     all_depts, depts = user.scope(cycle_id)
     cur = await conn.execute(
@@ -296,7 +296,7 @@ async def summary(cycle_id: int, week: int | None = None, user: CurrentUser = De
 
 
 @router.post("/cycles/{cycle_id}/attendance/{week_no}/fill-431")
-async def fill_431(cycle_id: int, week_no: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+async def fill_431(cycle_id: int, week_no: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     """يكتب صف الأسبوع (المدربون، المتدربون والحاضرون، الشعب والمنفذة) في نموذج 4-3-1 لكل قسم."""
     cycle = await load_cycle(conn, user, cycle_id)
     _manager(user)

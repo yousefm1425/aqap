@@ -144,7 +144,7 @@ async def reflect(conn: AsyncConnection, task_id: int, department_id: int, evide
 
 
 @router.get("/cycles/{cycle_id}/quality-tasks")
-async def list_tasks(cycle_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+async def list_tasks(cycle_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     await load_cycle(conn, user, cycle_id)
     all_depts, depts = user.scope(cycle_id)
     cur = await conn.execute(
@@ -201,7 +201,7 @@ async def list_tasks(cycle_id: int, user: CurrentUser = Depends(current_user), c
 
 
 @router.get("/cycles/{cycle_id}/quality-tasks/catalog")
-async def catalog(cycle_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+async def catalog(cycle_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     """المعايير الفرعية ومتطلباتها لاختيار الربط وعرض التوافق."""
     cycle = await load_cycle(conn, user, cycle_id)
     cur = await conn.execute(
@@ -216,7 +216,7 @@ async def catalog(cycle_id: int, user: CurrentUser = Depends(current_user), conn
 
 
 @router.post("/cycles/{cycle_id}/quality-tasks", status_code=201)
-async def create_task(cycle_id: int, body: TaskIn, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+async def create_task(cycle_id: int, body: TaskIn, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     await load_cycle(conn, user, cycle_id)
     _manager(user)
     await _actor(conn, user)
@@ -229,7 +229,7 @@ async def create_task(cycle_id: int, body: TaskIn, user: CurrentUser = Depends(c
 
 
 @router.post("/cycles/{cycle_id}/quality-tasks/seed", status_code=201)
-async def seed_tasks(cycle_id: int, body: SeedIn, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+async def seed_tasks(cycle_id: int, body: SeedIn, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     """يحمّل جدول أعمال الجودة المعتمد للفصل بتواريخ محسوبة من بداية الفصل، مع التوافق المقترح مع المعايير الفرعية."""
     cycle = await load_cycle(conn, user, cycle_id)
     _manager(user)
@@ -264,7 +264,7 @@ async def seed_tasks(cycle_id: int, body: SeedIn, user: CurrentUser = Depends(cu
 
 
 @router.patch("/quality-tasks/{task_id}")
-async def update_task(task_id: int, body: TaskIn, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+async def update_task(task_id: int, body: TaskIn, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     await _task(conn, user, task_id)
     _manager(user)
     await _actor(conn, user)
@@ -277,7 +277,7 @@ async def update_task(task_id: int, body: TaskIn, user: CurrentUser = Depends(cu
 
 
 @router.delete("/quality-tasks/{task_id}")
-async def delete_task(task_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+async def delete_task(task_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     await _task(conn, user, task_id)
     _manager(user)
     await _actor(conn, user)
@@ -286,7 +286,7 @@ async def delete_task(task_id: int, user: CurrentUser = Depends(current_user), c
 
 
 @router.put("/quality-tasks/{task_id}/links")
-async def set_links(task_id: int, body: LinksIn, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+async def set_links(task_id: int, body: LinksIn, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     """يحدد التوافق. ربط متطلب جديد ينعكس فوراً على الشواهد التي سلّمتها الأقسام سابقاً."""
     t = await _task(conn, user, task_id)
     _manager(user)
@@ -320,7 +320,7 @@ async def set_links(task_id: int, body: LinksIn, user: CurrentUser = Depends(cur
 
 
 @router.post("/quality-tasks/{task_id}/submit")
-async def submit_task(task_id: int, body: SubmitIn, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+async def submit_task(task_id: int, body: SubmitIn, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     t = await _task(conn, user, task_id)
     dept = body.department_id
     if t.get("depends_on") == "patterns":
@@ -372,7 +372,7 @@ async def submit_task(task_id: int, body: SubmitIn, user: CurrentUser = Depends(
 
 
 @router.post("/quality-tasks/{task_id}/review")
-async def review_task(task_id: int, body: ReviewIn, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+async def review_task(task_id: int, body: ReviewIn, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     await _task(conn, user, task_id)
     _manager(user)
     if body.decision == "returned" and not (body.note_ar or "").strip():

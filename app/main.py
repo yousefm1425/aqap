@@ -38,7 +38,7 @@ async def health():
 
 
 @app.get("/api/v1/me", tags=["النظام"])
-async def me(user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+async def me(user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     cur = await conn.execute("SELECT name_ar FROM institution WHERE id = %s", (user.institution_id,))
     inst = await cur.fetchone()
     return {**user.__dict__, "grants": [g.__dict__ for g in user.grants],
@@ -46,7 +46,7 @@ async def me(user: CurrentUser = Depends(current_user), conn: AsyncConnection = 
 
 
 @app.get("/api/v1/departments", tags=["النظام"])
-async def departments(user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+async def departments(user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     cur = await conn.execute(
         "SELECT id, code, name_ar, name_en FROM department WHERE institution_id = %s AND is_active ORDER BY code",
         (user.institution_id,))

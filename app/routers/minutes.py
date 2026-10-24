@@ -109,7 +109,7 @@ async def _full(conn: AsyncConnection, minutes_id: int) -> dict:
 
 @router.get("/cycles/{cycle_id}/minutes/templates")
 async def templates(cycle_id: int, department_id: int | None = None, user: CurrentUser = Depends(current_user),
-                    conn: AsyncConnection = Depends(get_conn)):
+                    conn: AsyncConnection = Depends(get_conn, scope="function")):
     """نماذج المحاضر لإطار الدورة، مع عدد المحاضر والمعتمد منها ضمن نطاق المستخدم."""
     cycle = await load_cycle(conn, user, cycle_id)
     rows = await _template_rows(conn, cycle)
@@ -127,7 +127,7 @@ async def templates(cycle_id: int, department_id: int | None = None, user: Curre
 
 @router.get("/cycles/{cycle_id}/minutes")
 async def list_minutes(cycle_id: int, department_id: int | None = None, template_id: int | None = None,
-                       user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+                       user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     await load_cycle(conn, user, cycle_id)
     all_depts, depts = user.scope(cycle_id)
     cur = await conn.execute(
@@ -142,7 +142,7 @@ async def list_minutes(cycle_id: int, department_id: int | None = None, template
 
 @router.post("/cycles/{cycle_id}/minutes", status_code=201)
 async def create_minutes(cycle_id: int, body: MinutesCreate, user: CurrentUser = Depends(current_user),
-                         conn: AsyncConnection = Depends(get_conn)):
+                         conn: AsyncConnection = Depends(get_conn, scope="function")):
     """محضر جديد من النموذج: المحاور المقترحة، وأعضاء القسم المسجلون في المنصة كقائمة حضور أولية."""
     cycle = await load_cycle(conn, user, cycle_id)
     if cycle["status"] not in ("open", "external_review"):
@@ -176,14 +176,14 @@ async def create_minutes(cycle_id: int, body: MinutesCreate, user: CurrentUser =
 
 
 @router.get("/minutes/{minutes_id}")
-async def get_minutes(minutes_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+async def get_minutes(minutes_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     await _load(conn, user, minutes_id)
     return await _full(conn, minutes_id)
 
 
 @router.put("/minutes/{minutes_id}")
 async def save_minutes(minutes_id: int, body: MinutesDoc, user: CurrentUser = Depends(current_user),
-                       conn: AsyncConnection = Depends(get_conn)):
+                       conn: AsyncConnection = Depends(get_conn, scope="function")):
     """حفظ المحضر كاملاً (المسودة أو بعد الإعادة فقط — مفروض في قاعدة البيانات)."""
     m = await _load(conn, user, minutes_id, lock=True)
     if not _is_dept(user, m):
@@ -217,7 +217,7 @@ async def save_minutes(minutes_id: int, body: MinutesDoc, user: CurrentUser = De
 
 
 @router.delete("/minutes/{minutes_id}", status_code=204)
-async def delete_minutes(minutes_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+async def delete_minutes(minutes_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     m = await _load(conn, user, minutes_id, lock=True)
     if not _is_dept(user, m):
         raise forbid()
@@ -270,7 +270,7 @@ async def _archive(conn: AsyncConnection, user: CurrentUser, minutes_id: int) ->
 
 @router.post("/minutes/{minutes_id}/transition")
 async def transition(minutes_id: int, body: MinutesTransitionIn, user: CurrentUser = Depends(current_user),
-                     conn: AsyncConnection = Depends(get_conn)):
+                     conn: AsyncConnection = Depends(get_conn, scope="function")):
     await _load(conn, user, minutes_id)
     cur = await conn.execute("SELECT transition_minutes(%s, %s, %s, %s) AS s", (minutes_id, body.to_status, user.id, body.comment))
     result = {"minutes_id": minutes_id, "status": (await cur.fetchone())["s"]}
@@ -281,7 +281,7 @@ async def transition(minutes_id: int, body: MinutesTransitionIn, user: CurrentUs
 
 @router.patch("/minutes/recommendations/{rec_id}/follow-up")
 async def follow_up(rec_id: int, body: FollowUpIn, user: CurrentUser = Depends(current_user),
-                    conn: AsyncConnection = Depends(get_conn)):
+                    conn: AsyncConnection = Depends(get_conn, scope="function")):
     cur = await conn.execute(
         "SELECT ai.minutes_id FROM minutes_recommendation r JOIN minutes_agenda_item ai ON ai.id = r.agenda_item_id WHERE r.id = %s",
         (rec_id,))
@@ -302,7 +302,7 @@ async def follow_up(rec_id: int, body: FollowUpIn, user: CurrentUser = Depends(c
 
 @router.post("/minutes/{minutes_id}/attendees/confirm")
 async def confirm_attendance(minutes_id: int, user: CurrentUser = Depends(current_user),
-                             conn: AsyncConnection = Depends(get_conn)):
+                             conn: AsyncConnection = Depends(get_conn, scope="function")):
     """يؤكد المستخدم حضوره بنفسه (بديل التوقيع اليدوي)."""
     cur = await conn.execute("SELECT id, confirmed_at FROM minutes_attendee WHERE minutes_id = %s AND user_id = %s",
                              (minutes_id, user.id))
@@ -316,7 +316,7 @@ async def confirm_attendance(minutes_id: int, user: CurrentUser = Depends(curren
 
 @router.post("/minutes/{minutes_id}/archive")
 async def archive_follow_up(minutes_id: int, user: CurrentUser = Depends(current_user),
-                            conn: AsyncConnection = Depends(get_conn)):
+                            conn: AsyncConnection = Depends(get_conn, scope="function")):
     """نسخة مؤرشفة جديدة من المحضر المعتمد تتضمن متابعة التوصيات وتأكيدات الحضور."""
     m = await _load(conn, user, minutes_id)
     if m["status"] != "approved":
@@ -327,7 +327,7 @@ async def archive_follow_up(minutes_id: int, user: CurrentUser = Depends(current
 
 
 @router.get("/minutes/{minutes_id}/pdf")
-async def minutes_pdf(minutes_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+async def minutes_pdf(minutes_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     """معاينة المحضر بحالته الحالية (المسودة تحمل علامة «غير معتمد»)."""
     await _load(conn, user, minutes_id)
     doc = await _full(conn, minutes_id)
@@ -367,7 +367,7 @@ async def _attach(conn: AsyncConnection, user: CurrentUser, m: dict, evidence_id
 
 @router.post("/minutes/{minutes_id}/attachments", status_code=201)
 async def attach(minutes_id: int, body: MinutesAttachIn, user: CurrentUser = Depends(current_user),
-                 conn: AsyncConnection = Depends(get_conn)):
+                 conn: AsyncConnection = Depends(get_conn, scope="function")):
     """إرفاق شاهد قائم من بنك شواهد القسم، أو رابط جديد يُنشأ في البنك ثم يُرفق."""
     m = await _attach_target(conn, user, minutes_id)
     if body.evidence_id is not None:
@@ -389,7 +389,7 @@ async def attach(minutes_id: int, body: MinutesAttachIn, user: CurrentUser = Dep
 @router.post("/minutes/{minutes_id}/attachments/upload", status_code=201)
 async def attach_upload(minutes_id: int, file: UploadFile = File(...), title_ar: str | None = Form(None),
                         note: str | None = Form(None), user: CurrentUser = Depends(current_user),
-                        conn: AsyncConnection = Depends(get_conn)):
+                        conn: AsyncConnection = Depends(get_conn, scope="function")):
     """رفع ملف شاهد داعم: يُنشأ في بنك شواهد القسم ويُرفق بالمحضر في خطوة واحدة."""
     m = await _attach_target(conn, user, minutes_id)
     if m["status"] == "submitted":                     # نفحصها قبل رفع الملف كي لا يبقى ملف يتيم
@@ -420,7 +420,7 @@ async def attach_upload(minutes_id: int, file: UploadFile = File(...), title_ar:
 
 @router.delete("/minutes/{minutes_id}/attachments/{evidence_id}", status_code=204)
 async def detach(minutes_id: int, evidence_id: int, user: CurrentUser = Depends(current_user),
-                 conn: AsyncConnection = Depends(get_conn)):
+                 conn: AsyncConnection = Depends(get_conn, scope="function")):
     """فك ارتباط الشاهد بالمحضر (المسودة أو بعد الإعادة فقط)؛ يبقى الشاهد في بنك القسم."""
     m = await _attach_target(conn, user, minutes_id)
     cur = await conn.execute("DELETE FROM minutes_attachment WHERE minutes_id = %s AND evidence_id = %s RETURNING id",

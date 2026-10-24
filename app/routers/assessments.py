@@ -53,7 +53,7 @@ async def _patch(conn: AsyncConnection, assessment_id: int, fields: dict) -> dic
 @router.get("/cycles/{cycle_id}/assessments")
 async def list_assessments(cycle_id: int, department_id: int | None = None,
                            status: AssessmentStatus | None = Query(default=None),
-                           user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+                           user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     await load_cycle(conn, user, cycle_id)
     all_depts, depts = user.scope(cycle_id)
     cur = await conn.execute(_LIST_SQL, {"cycle": cycle_id, "all": all_depts, "depts": depts,
@@ -63,7 +63,7 @@ async def list_assessments(cycle_id: int, department_id: int | None = None,
 
 @router.get("/assessments/{assessment_id}")
 async def get_assessment(assessment_id: int, user: CurrentUser = Depends(current_user),
-                         conn: AsyncConnection = Depends(get_conn)):
+                         conn: AsyncConnection = Depends(get_conn, scope="function")):
     a = await _load(conn, user, assessment_id)
     cur = await conn.execute(
         """SELECT r.code, r.text_ar, r.guidance_ar, r.expected_evidence_ar, r.evidence_required,
@@ -88,7 +88,7 @@ async def get_assessment(assessment_id: int, user: CurrentUser = Depends(current
 
 
 @router.get("/assessments/{assessment_id}/pdf")
-async def assessment_pdf(assessment_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+async def assessment_pdf(assessment_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     """تقرير المتطلب PDF بهوية المؤسسة — متاح لكل من يطّلع على المتطلب (القسم والجودة والمقيّمين)."""
     from ..requirement_pdf import render_pdf
     d = await get_assessment(assessment_id, user, conn)
@@ -122,7 +122,7 @@ async def assessment_pdf(assessment_id: int, user: CurrentUser = Depends(current
 
 @router.patch("/assessments/{assessment_id}/self")
 async def patch_self(assessment_id: int, body: SelfAssessmentPatch, user: CurrentUser = Depends(current_user),
-                     conn: AsyncConnection = Depends(get_conn)):
+                     conn: AsyncConnection = Depends(get_conn, scope="function")):
     a = await _load(conn, user, assessment_id, lock=True)
     if not user.has(*DEPT_EDITORS, department_id=a["department_id"], cycle_id=a["cycle_id"]):
         raise forbid("التقييم الذاتي من صلاحية منسق القسم أو أعضائه")
@@ -131,7 +131,7 @@ async def patch_self(assessment_id: int, body: SelfAssessmentPatch, user: Curren
 
 @router.patch("/assessments/{assessment_id}/external")
 async def patch_external(assessment_id: int, body: ExternalAssessmentPatch,
-                         user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+                         user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     a = await _load(conn, user, assessment_id, lock=True)
     if not user.has("quality_auditor", "external_reviewer", department_id=a["department_id"], cycle_id=a["cycle_id"]):
         raise forbid("التقييم الخارجي من صلاحية المدقق أو المقيّم الخارجي")
@@ -140,7 +140,7 @@ async def patch_external(assessment_id: int, body: ExternalAssessmentPatch,
 
 @router.post("/assessments/{assessment_id}/transition")
 async def transition(assessment_id: int, body: TransitionIn, user: CurrentUser = Depends(current_user),
-                     conn: AsyncConnection = Depends(get_conn)):
+                     conn: AsyncConnection = Depends(get_conn, scope="function")):
     await _load(conn, user, assessment_id)
     # الصلاحية وشروط الاكتمال تُفحص داخل aqap.transition_assessment
     cur = await conn.execute("SELECT transition_assessment(%s, %s, %s, %s) AS status",
@@ -150,7 +150,7 @@ async def transition(assessment_id: int, body: TransitionIn, user: CurrentUser =
 
 @router.post("/assessments/{assessment_id}/evidence", status_code=201)
 async def link_evidence(assessment_id: int, body: EvidenceLink, user: CurrentUser = Depends(current_user),
-                        conn: AsyncConnection = Depends(get_conn)):
+                        conn: AsyncConnection = Depends(get_conn, scope="function")):
     a = await _load(conn, user, assessment_id)
     if not user.has(*DEPT_EDITORS, department_id=a["department_id"], cycle_id=a["cycle_id"]):
         raise forbid("ربط الشواهد من صلاحية منسق القسم أو أعضائه")
@@ -170,7 +170,7 @@ async def link_evidence(assessment_id: int, body: EvidenceLink, user: CurrentUse
 
 @router.delete("/assessments/{assessment_id}/evidence/{evidence_id}", status_code=204)
 async def unlink_evidence(assessment_id: int, evidence_id: int, user: CurrentUser = Depends(current_user),
-                          conn: AsyncConnection = Depends(get_conn)):
+                          conn: AsyncConnection = Depends(get_conn, scope="function")):
     a = await _load(conn, user, assessment_id)
     if not user.has(*DEPT_EDITORS, department_id=a["department_id"], cycle_id=a["cycle_id"]):
         raise forbid()

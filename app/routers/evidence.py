@@ -39,7 +39,7 @@ def _can_upload(user: CurrentUser, department_id: int | None) -> bool:
 
 @router.post("", status_code=201)
 async def create_evidence(body: EvidenceCreate, user: CurrentUser = Depends(current_user),
-                          conn: AsyncConnection = Depends(get_conn)):
+                          conn: AsyncConnection = Depends(get_conn, scope="function")):
     if not _can_upload(user, body.department_id):
         raise forbid("لا تملك صلاحية إضافة شواهد لهذا القسم")
     cur = await conn.execute(
@@ -53,7 +53,7 @@ async def create_evidence(body: EvidenceCreate, user: CurrentUser = Depends(curr
 
 @router.get("")
 async def list_evidence(department_id: int | None = None, q: str | None = None,
-                        user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+                        user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     cur = await conn.execute(
         """SELECT e.*, (SELECT count(*) FROM assessment_evidence ae WHERE ae.evidence_id = e.id) AS usage_count
              FROM evidence e
@@ -67,7 +67,7 @@ async def list_evidence(department_id: int | None = None, q: str | None = None,
 
 @router.post("/{evidence_id}/versions", status_code=201)
 async def upload_version(evidence_id: int, file: UploadFile = File(...), change_note: str | None = Form(None),
-                         user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+                         user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     ev = await _load(conn, user, evidence_id)
     if not _can_upload(user, ev["department_id"]):
         raise forbid("لا تملك صلاحية رفع نسخ لهذا الشاهد")
@@ -93,7 +93,7 @@ async def upload_version(evidence_id: int, file: UploadFile = File(...), change_
 
 @router.get("/{evidence_id}/versions")
 async def list_versions(evidence_id: int, user: CurrentUser = Depends(current_user),
-                        conn: AsyncConnection = Depends(get_conn)):
+                        conn: AsyncConnection = Depends(get_conn, scope="function")):
     await _load(conn, user, evidence_id)
     cur = await conn.execute(
         """SELECT v.id, v.version_no, v.file_name, v.mime_type, v.size_bytes, v.sha256, v.change_note,
@@ -105,7 +105,7 @@ async def list_versions(evidence_id: int, user: CurrentUser = Depends(current_us
 
 @router.get("/{evidence_id}/download")
 async def download(evidence_id: int, version: int | None = None, user: CurrentUser = Depends(current_user),
-                   conn: AsyncConnection = Depends(get_conn)):
+                   conn: AsyncConnection = Depends(get_conn, scope="function")):
     ev = await _load(conn, user, evidence_id)
     if ev["kind"] == "link":
         return {"url": ev["url"], "expires_in": None}

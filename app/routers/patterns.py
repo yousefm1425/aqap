@@ -64,7 +64,7 @@ async def _actor(conn, user):
 
 
 @router.get("/cycles/{cycle_id}/patterns")
-async def get_patterns(cycle_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+async def get_patterns(cycle_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     await load_cycle(conn, user, cycle_id)
     a = await activation(conn, cycle_id)
     progress = None
@@ -80,7 +80,7 @@ async def get_patterns(cycle_id: int, user: CurrentUser = Depends(current_user),
 
 @router.post("/cycles/{cycle_id}/patterns/activate", status_code=201)
 async def activate(cycle_id: int, body: ActivateIn, user: CurrentUser = Depends(current_user),
-                   conn: AsyncConnection = Depends(get_conn)):
+                   conn: AsyncConnection = Depends(get_conn, scope="function")):
     cycle = await load_cycle(conn, user, cycle_id)
     if not user.has(*MANAGERS):
         raise forbid("تسجيل قرار اعتماد أنماط التدريب من صلاحية وكيل الجودة")
@@ -119,7 +119,7 @@ async def activate(cycle_id: int, body: ActivateIn, user: CurrentUser = Depends(
 
 
 @router.post("/cycles/{cycle_id}/patterns/revoke")
-async def revoke(cycle_id: int, body: RevokeIn, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+async def revoke(cycle_id: int, body: RevokeIn, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     await load_cycle(conn, user, cycle_id)
     if not user.has(*MANAGERS):
         raise forbid("إيقاف أنماط التدريب من صلاحية وكيل الجودة")
@@ -134,14 +134,14 @@ async def revoke(cycle_id: int, body: RevokeIn, user: CurrentUser = Depends(curr
 
 # ---------------------------------------------------------------- زيارات التقييم الخارجي
 @router.get("/cycles/{cycle_id}/external-visits")
-async def list_visits(cycle_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+async def list_visits(cycle_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     await load_cycle(conn, user, cycle_id)
     cur = await conn.execute("SELECT * FROM external_visit WHERE cycle_id = %s ORDER BY visit_date, id", (cycle_id,))
     return await cur.fetchall()
 
 
 @router.post("/cycles/{cycle_id}/external-visits", status_code=201)
-async def add_visit(cycle_id: int, body: VisitIn, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+async def add_visit(cycle_id: int, body: VisitIn, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     await load_cycle(conn, user, cycle_id)
     if not user.has(*MANAGERS):
         raise forbid("جدول الزيارات من صلاحية وكيل الجودة")
@@ -158,7 +158,7 @@ async def add_visit(cycle_id: int, body: VisitIn, user: CurrentUser = Depends(cu
 
 
 @router.delete("/external-visits/{visit_id}")
-async def delete_visit(visit_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+async def delete_visit(visit_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     if not user.has(*MANAGERS):
         raise forbid("جدول الزيارات من صلاحية وكيل الجودة")
     await _actor(conn, user)

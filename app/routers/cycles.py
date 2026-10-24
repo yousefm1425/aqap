@@ -8,7 +8,7 @@ router = APIRouter(prefix="/cycles", tags=["دورات التقييم"])
 
 
 @router.get("")
-async def list_cycles(user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+async def list_cycles(user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     cur = await conn.execute(
         """SELECT c.*, f.code AS framework_code FROM assessment_cycle c JOIN framework f ON f.id = c.framework_id
             WHERE c.institution_id = %(inst)s
@@ -20,7 +20,7 @@ async def list_cycles(user: CurrentUser = Depends(current_user), conn: AsyncConn
 
 @router.post("", status_code=201)
 async def create_cycle(body: CycleCreate, user: CurrentUser = Depends(current_user),
-                       conn: AsyncConnection = Depends(get_conn)):
+                       conn: AsyncConnection = Depends(get_conn, scope="function")):
     if not user.has("quality_dean", "system_admin"):
         raise forbid("إنشاء الدورات من صلاحية وكيل الجودة")
     cur = await conn.execute(
@@ -38,7 +38,7 @@ async def create_cycle(body: CycleCreate, user: CurrentUser = Depends(current_us
 
 @router.post("/{cycle_id}/open")
 async def open_cycle(cycle_id: int, user: CurrentUser = Depends(current_user),
-                     conn: AsyncConnection = Depends(get_conn)):
+                     conn: AsyncConnection = Depends(get_conn, scope="function")):
     cycle = await load_cycle(conn, user, cycle_id)
     if not user.has("quality_dean", "system_admin", cycle_id=cycle_id):
         raise forbid("فتح الدورة من صلاحية وكيل الجودة")
@@ -52,7 +52,7 @@ async def open_cycle(cycle_id: int, user: CurrentUser = Depends(current_user),
 
 @router.post("/{cycle_id}/external-review")
 async def start_external_review(cycle_id: int, user: CurrentUser = Depends(current_user),
-                                conn: AsyncConnection = Depends(get_conn)):
+                                conn: AsyncConnection = Depends(get_conn, scope="function")):
     cycle = await load_cycle(conn, user, cycle_id)
     if not user.has("quality_dean", "system_admin", cycle_id=cycle_id):
         raise forbid()
@@ -64,7 +64,7 @@ async def start_external_review(cycle_id: int, user: CurrentUser = Depends(curre
 
 @router.post("/{cycle_id}/close")
 async def close_cycle(cycle_id: int, user: CurrentUser = Depends(current_user),
-                      conn: AsyncConnection = Depends(get_conn)):
+                      conn: AsyncConnection = Depends(get_conn, scope="function")):
     await load_cycle(conn, user, cycle_id)
     await conn.execute("SELECT close_cycle(%s, %s)", (cycle_id, user.id))  # الصلاحية والشروط داخل الدالة
     return {"cycle_id": cycle_id, "status": "closed"}

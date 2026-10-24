@@ -43,7 +43,7 @@ def _status(done: int, total: int, due: date, today: date) -> str:
 
 @router.get("/cycles/{cycle_id}/calendar")
 async def calendar(cycle_id: int, department_id: int | None = None, user: CurrentUser = Depends(current_user),
-                   conn: AsyncConnection = Depends(get_conn)):
+                   conn: AsyncConnection = Depends(get_conn, scope="function")):
     await load_cycle(conn, user, cycle_id)
     all_depts, depts = user.scope(cycle_id)
     cur = await conn.execute(
@@ -123,7 +123,7 @@ def _manager(user: CurrentUser, cycle_id: int) -> None:
 
 @router.post("/cycles/{cycle_id}/calendar", status_code=201)
 async def add_deadline(cycle_id: int, body: DeadlineIn, user: CurrentUser = Depends(current_user),
-                       conn: AsyncConnection = Depends(get_conn)):
+                       conn: AsyncConnection = Depends(get_conn, scope="function")):
     cycle = await load_cycle(conn, user, cycle_id)
     _manager(user, cycle_id)
     return {"id": await _upsert(conn, user, cycle, body)}
@@ -131,7 +131,7 @@ async def add_deadline(cycle_id: int, body: DeadlineIn, user: CurrentUser = Depe
 
 @router.delete("/calendar/{deadline_id}")
 async def delete_deadline(deadline_id: int, user: CurrentUser = Depends(current_user),
-                          conn: AsyncConnection = Depends(get_conn)):
+                          conn: AsyncConnection = Depends(get_conn, scope="function")):
     cur = await conn.execute("SELECT cycle_id FROM cycle_deadline WHERE id = %s", (deadline_id,))
     row = await cur.fetchone()
     if row is None:
@@ -148,7 +148,7 @@ HEADERS = ["الرمز (معيار فرعي أو متطلب)", "الاسم (لل
 
 
 @router.get("/cycles/{cycle_id}/calendar/template")
-async def template(cycle_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+async def template(cycle_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     """قالب CSV يفتح في Excel: صف لكل معيار فرعي، ويمكن إضافة صفوف لمتطلبات بعينها أو لقسم بعينه."""
     cycle = await load_cycle(conn, user, cycle_id)
     cur = await conn.execute(
@@ -213,7 +213,7 @@ def _date(v: str) -> date | None:
 
 @router.post("/cycles/{cycle_id}/calendar/import")
 async def import_calendar(cycle_id: int, file: UploadFile = File(...), user: CurrentUser = Depends(current_user),
-                          conn: AsyncConnection = Depends(get_conn)):
+                          conn: AsyncConnection = Depends(get_conn, scope="function")):
     cycle = await load_cycle(conn, user, cycle_id)
     _manager(user, cycle_id)
     raw = await file.read()

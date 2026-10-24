@@ -74,7 +74,7 @@ async def _save(conn, cycle_id: int, slot: str, body: UploadIn, user_id: int) ->
 
 
 @router.post("/cycles/{cycle_id}/enrollment", status_code=201)
-async def upload(cycle_id: int, body: UploadIn, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+async def upload(cycle_id: int, body: UploadIn, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     cycle = await load_cycle(conn, user, cycle_id)
     _manager(user)
     await conn.execute("SELECT set_config('aqap.user_id', %s, true)", (str(user.id),))
@@ -91,7 +91,7 @@ async def upload(cycle_id: int, body: UploadIn, user: CurrentUser = Depends(curr
 
 
 @router.delete("/cycles/{cycle_id}/enrollment")
-async def clear(cycle_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+async def clear(cycle_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     await load_cycle(conn, user, cycle_id)
     _manager(user)
     await conn.execute("SELECT set_config('aqap.user_id', %s, true)", (str(user.id),))
@@ -161,13 +161,13 @@ async def _summary(conn, user: CurrentUser, cycle: dict) -> dict:
 
 
 @router.get("/cycles/{cycle_id}/enrollment")
-async def summary(cycle_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+async def summary(cycle_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     cycle = await load_cycle(conn, user, cycle_id)
     return await _summary(conn, user, cycle)
 
 
 @router.post("/cycles/{cycle_id}/enrollment/apply-counts")
-async def apply_counts(cycle_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+async def apply_counts(cycle_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     """اعتماد أعداد ST06 الأحدث عدداً لمتدربي كل قسم في المنصة (بدل الإدخال اليدوي)."""
     cycle = await load_cycle(conn, user, cycle_id)
     _manager(user)

@@ -60,12 +60,12 @@ async def assert_link_ok(conn: AsyncConnection, institution_id: int, url: str) -
 
 
 @router.get("/settings/evidence")
-async def read_settings(user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+async def read_settings(user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     return {**await get_settings(conn, user.institution_id), "can_edit": user.has(*MANAGERS)}
 
 
 @router.put("/settings/evidence")
-async def write_settings(body: SettingsIn, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+async def write_settings(body: SettingsIn, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     _manager(user)
     domains = sorted({d.strip().lower().removeprefix("https://").removeprefix("http://").strip("/")
                       for d in body.allowed_link_domains if d.strip()})
@@ -82,7 +82,7 @@ async def write_settings(body: SettingsIn, user: CurrentUser = Depends(current_u
 # ---------------------------------------------------------------- مجلدات الشواهد
 @router.get("/cycles/{cycle_id}/folders")
 async def list_folders(cycle_id: int, department_id: int | None = None, user: CurrentUser = Depends(current_user),
-                       conn: AsyncConnection = Depends(get_conn)):
+                       conn: AsyncConnection = Depends(get_conn, scope="function")):
     await load_cycle(conn, user, cycle_id)
     all_depts, depts = user.scope(cycle_id)
     cur = await conn.execute(
@@ -99,7 +99,7 @@ async def list_folders(cycle_id: int, department_id: int | None = None, user: Cu
 
 @router.put("/cycles/{cycle_id}/folders")
 async def set_folder(cycle_id: int, body: FolderIn, user: CurrentUser = Depends(current_user),
-                     conn: AsyncConnection = Depends(get_conn)):
+                     conn: AsyncConnection = Depends(get_conn, scope="function")):
     cycle = await load_cycle(conn, user, cycle_id)
     _manager(user)
     return await _save_folder(conn, user, cycle, body)
@@ -111,7 +111,7 @@ class FoldersBulkIn(BaseModel):
 
 @router.put("/cycles/{cycle_id}/folders/bulk")
 async def set_folders_bulk(cycle_id: int, body: FoldersBulkIn, user: CurrentUser = Depends(current_user),
-                           conn: AsyncConnection = Depends(get_conn)):
+                           conn: AsyncConnection = Depends(get_conn, scope="function")):
     """حفظ روابط مجلدات كثيرة دفعة واحدة (توليدها من مجلد OneDrive رئيسي: معيار ← معيار فرعي ← قسم)."""
     cycle = await load_cycle(conn, user, cycle_id)
     _manager(user)
@@ -147,7 +147,7 @@ async def _save_folder(conn, user, cycle, body: FolderIn) -> dict:
 
 
 @router.delete("/folders/{folder_id}")
-async def delete_folder(folder_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+async def delete_folder(folder_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     _manager(user)
     await conn.execute("SELECT set_config('aqap.user_id', %s, true)", (str(user.id),))
     cur = await conn.execute(
@@ -183,7 +183,7 @@ async def classify(client: httpx.AsyncClient, url: str) -> tuple[str, int | None
 
 @router.post("/evidence/links/check")
 async def check_links(department_id: int | None = None, limit: int = 300, user: CurrentUser = Depends(current_user),
-                      conn: AsyncConnection = Depends(get_conn)):
+                      conn: AsyncConnection = Depends(get_conn, scope="function")):
     _manager(user)
     cur = await conn.execute(
         """SELECT id, url FROM evidence WHERE institution_id = %s AND kind = 'link' AND NOT is_archived
@@ -206,7 +206,7 @@ async def check_links(department_id: int | None = None, limit: int = 300, user: 
 
 @router.get("/evidence/links/problems")
 async def link_problems(department_id: int | None = None, user: CurrentUser = Depends(current_user),
-                        conn: AsyncConnection = Depends(get_conn)):
+                        conn: AsyncConnection = Depends(get_conn, scope="function")):
     all_depts, depts = user.scope()
     cur = await conn.execute(
         """SELECT e.id, e.title_ar, e.url, e.department_id, d.name_ar AS department_name, e.link_status, e.link_http, e.link_checked_at

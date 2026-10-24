@@ -17,7 +17,7 @@ router = APIRouter(tags=["التصدير"])
 
 @router.get("/cycles/{cycle_id}/export/official")
 async def export_official(cycle_id: int, background: BackgroundTasks, user: CurrentUser = Depends(current_user),
-                          conn: AsyncConnection = Depends(get_conn)):
+                          conn: AsyncConnection = Depends(get_conn, scope="function")):
     """ملف «نموذج العمل الشامل» الرسمي معبأً بالأقسام والتقديرات وخطط التحسين (.xlsx)."""
     cycle = await load_cycle(conn, user, cycle_id)
     if not user.has("quality_dean", "quality_auditor", "system_admin", cycle_id=cycle_id):

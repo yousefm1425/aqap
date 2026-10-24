@@ -21,14 +21,14 @@ async def _depts(conn: AsyncConnection, user: CurrentUser, cycle_id: int) -> lis
 
 
 @router.get("/cycles/{cycle_id}/college-reports")
-async def list_reports(cycle_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+async def list_reports(cycle_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     await load_cycle(conn, user, cycle_id)
     return cr.catalog()
 
 
 @router.get("/cycles/{cycle_id}/college-reports/{key}")
 async def get_report(cycle_id: int, key: str, f: str | None = None, user: CurrentUser = Depends(current_user),
-                     conn: AsyncConnection = Depends(get_conn)):
+                     conn: AsyncConnection = Depends(get_conn, scope="function")):
     await load_cycle(conn, user, cycle_id)
     if key not in cr.BY_KEY:
         raise not_found("التقرير غير موجود")
@@ -37,7 +37,7 @@ async def get_report(cycle_id: int, key: str, f: str | None = None, user: Curren
 
 @router.get("/cycles/{cycle_id}/college-reports/{key}/xlsx")
 async def export_report(cycle_id: int, key: str, background: BackgroundTasks, f: str | None = None,
-                        user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+                        user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     cycle = await load_cycle(conn, user, cycle_id)
     if key not in cr.BY_KEY:
         raise not_found("التقرير غير موجود")

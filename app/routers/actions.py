@@ -46,7 +46,7 @@ async def _load(conn: AsyncConnection, user: CurrentUser, action_id: int, lock: 
 @router.get("/cycles/{cycle_id}/actions")
 async def list_actions(cycle_id: int, department_id: int | None = None, status: ActionStatus | None = None,
                        overdue: bool | None = None, user: CurrentUser = Depends(current_user),
-                       conn: AsyncConnection = Depends(get_conn)):
+                       conn: AsyncConnection = Depends(get_conn, scope="function")):
     await load_cycle(conn, user, cycle_id)
     all_depts, depts = user.scope(cycle_id)
     cur = await conn.execute(_LIST, {"cycle": cycle_id, "all": all_depts, "depts": depts, "me": user.id,
@@ -55,7 +55,7 @@ async def list_actions(cycle_id: int, department_id: int | None = None, status: 
 
 
 @router.post("/cycles/{cycle_id}/actions/generate")
-async def generate(cycle_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+async def generate(cycle_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     """يولّد خططاً للمتطلبات النهائية «جزئي/غير متحقق» التي لا خطة لها (يحدث تلقائياً عند الاعتماد النهائي)."""
     await load_cycle(conn, user, cycle_id)
     if not user.has(*MANAGERS, cycle_id=cycle_id):
@@ -66,7 +66,7 @@ async def generate(cycle_id: int, user: CurrentUser = Depends(current_user), con
 
 @router.get("/actions/{action_id}")
 async def get_action(action_id: int, user: CurrentUser = Depends(current_user),
-                     conn: AsyncConnection = Depends(get_conn)):
+                     conn: AsyncConnection = Depends(get_conn, scope="function")):
     await _load(conn, user, action_id)
     cur = await conn.execute(
         """SELECT t.*, u.full_name_ar AS owner_name, ab.full_name_ar AS adequacy_by_name,
@@ -105,7 +105,7 @@ async def _check_refs(conn: AsyncConnection, user: CurrentUser, dept: int | None
 
 @router.post("/actions", status_code=201)
 async def create_action(body: ActionCreate, user: CurrentUser = Depends(current_user),
-                        conn: AsyncConnection = Depends(get_conn)):
+                        conn: AsyncConnection = Depends(get_conn, scope="function")):
     await load_cycle(conn, user, body.cycle_id)
     dept = body.department_id
     if body.assessment_id is not None:
@@ -126,7 +126,7 @@ async def create_action(body: ActionCreate, user: CurrentUser = Depends(current_
 
 @router.patch("/actions/{action_id}")
 async def patch_action(action_id: int, body: ActionPatch, user: CurrentUser = Depends(current_user),
-                       conn: AsyncConnection = Depends(get_conn)):
+                       conn: AsyncConnection = Depends(get_conn, scope="function")):
     act = await _load(conn, user, action_id, lock=True)
     fields = body.model_dump(exclude_unset=True)
     if not fields:
@@ -146,7 +146,7 @@ async def patch_action(action_id: int, body: ActionPatch, user: CurrentUser = De
 
 @router.post("/actions/{action_id}/transition")
 async def transition(action_id: int, body: ActionTransitionIn, user: CurrentUser = Depends(current_user),
-                     conn: AsyncConnection = Depends(get_conn)):
+                     conn: AsyncConnection = Depends(get_conn, scope="function")):
     await _load(conn, user, action_id)
     cur = await conn.execute("SELECT transition_action(%s, %s, %s, %s, %s) AS status",
                              (action_id, body.to_status, user.id, body.comment, body.adequacy))
@@ -155,7 +155,7 @@ async def transition(action_id: int, body: ActionTransitionIn, user: CurrentUser
 
 @router.get("/departments/{department_id}/members")
 async def department_members(department_id: int, user: CurrentUser = Depends(current_user),
-                             conn: AsyncConnection = Depends(get_conn)):
+                             conn: AsyncConnection = Depends(get_conn, scope="function")):
     """مرشحو «المسؤول عن التنفيذ»: من لهم دور فعّال في القسم."""
     if not user.can_view_department(department_id):
         raise not_found("القسم غير موجود")
