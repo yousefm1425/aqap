@@ -12,7 +12,7 @@ const STATUS = { draft: 'مسودة', submitted: 'بانتظار اعتماد ر
 const STATUS_CLASS = { draft: 's-draft', submitted: 's-submitted', returned: 's-returned', approved: 's-final' };
 const ACTIVE = ['open', 'external_review'];
 const KIND = { plan: 'خطة', report: 'تقرير' };
-const FU_CLASS = { 'مُنفذ': 'fu-done', 'مُنفذ جزئي': 'fu-partial', 'لم يُنفذ': 'fu-not', 'مؤجل / ملغى بقرار': 'fu-deferred' };
+const FU_CLASS = { 'مُنفذ': 'fu-done', 'مُنفذ جزئي': 'fu-partial', 'لم يُنفذ': 'fu-not' };
 const newId = () => Math.random().toString(36).slice(2, 12);
 // ------------------------------------------------------------------ استيراد صفوف ملصوقة (من Excel أو منصة الإرشاد)
 const normLabel = t => String(t ?? '').replace(/[ـً-ْ]/g, '').replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه')

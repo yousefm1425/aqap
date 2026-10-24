@@ -19,7 +19,8 @@ from typing import Any
 SRC_RE = re.compile(r"^[a-z0-9_]{1,40}:[A-Za-z0-9_-]{1,40}$")
 ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,24}$")
 MAX_TEXT = 4000
-DONE, PARTIAL, NOT_DONE, DEFERRED = "مُنفذ", "مُنفذ جزئي", "لم يُنفذ", "مؤجل / ملغى بقرار"
+DONE, PARTIAL, NOT_DONE = "مُنفذ", "مُنفذ جزئي", "لم يُنفذ"
+REMOVED_OPTIONS = {"مؤجل / ملغى بقرار"}           # خيار أُلغي: يُعامل كفارغ إن وُجد في بيانات محفوظة
 REASON_KEYS = ("obstacles", "reasons", "challenges", "notes")      # أعمدة سبب عدم التنفيذ أو المسوّغ
 
 
@@ -69,6 +70,8 @@ def _clean_value(c: dict, v: Any, where: str) -> Any:
     s = str(v).strip()
     if len(s) > MAX_TEXT:
         raise FormError(f"{where}: «{c['label']}» أطول من المسموح")
+    if t == "select" and s in REMOVED_OPTIONS:
+        return None
     if t == "select" and s not in c["options"]:
         raise FormError(f"{where}: قيمة غير مسموحة في «{c['label']}»")
     if t == "url" and not re.match(r"^https?://\S+$", s):
@@ -240,14 +243,10 @@ def missing_for_submit(schema: dict, plan: dict, follow: dict) -> list[str]:
                 msgs.append(f"«{title}»: أضف صفاً واحداً على الأقل")
             req = [c for c in input_cols(s) if c.get("required") and not c.get("fixed")
                    and (c["phase"] == "plan" or table_phase(s) == "follow")]
-            sc = _status_col(s)
-            reason = next((c for c in s["columns"] if c["key"] in REASON_KEYS), None)
             for i, r in enumerate(rows, 1):
                 miss = [c["label"] for c in req if _empty(r.get(c["key"]))]
                 if miss:
                     msgs.append(f"«{title}» صف {i}: أكمل {('، '.join(miss))}")
-                if sc and reason and r.get(sc["key"]) == DEFERRED and _empty(r.get(reason["key"])):
-                    msgs.append(f"«{title}» صف {i}: اكتب مسوّغ التأجيل أو الإلغاء ورقم القرار في «{reason['label']}»")
         elif s["type"] == "fields":
             vals = plan.get(s["key"], {})
             miss = [c["label"] for c in s["fields"] if c.get("required") and c["phase"] == "plan" and _empty(vals.get(c["key"]))]
