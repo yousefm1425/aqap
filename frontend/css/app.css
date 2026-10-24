@@ -658,3 +658,5 @@ a.sreq-text:hover { color: var(--primary); text-decoration: underline; }
 .task-link:hover { background: var(--primary); color: #fff; border-color: var(--primary); }
 .task-link.t-form { border-color: #CFE3F0; background: #F3F8FC; color: #2B6A8F; }
 .task-link.t-minutes { border-color: #EADFC6; background: #FCF8EF; color: #8A5A12; }
+
+.fu-deferred { background: #EEF1F4 !important; color: #5A6779 !important; }

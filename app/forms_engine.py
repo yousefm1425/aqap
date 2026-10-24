@@ -19,7 +19,8 @@ from typing import Any
 SRC_RE = re.compile(r"^[a-z0-9_]{1,40}:[A-Za-z0-9_-]{1,40}$")
 ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,24}$")
 MAX_TEXT = 4000
-DONE, PARTIAL, NOT_DONE = "مُنفذ", "مُنفذ جزئي", "لم يُنفذ"
+DONE, PARTIAL, NOT_DONE, DEFERRED = "مُنفذ", "مُنفذ جزئي", "لم يُنفذ", "مؤجل / ملغى بقرار"
+REASON_KEYS = ("obstacles", "reasons", "challenges", "notes")      # أعمدة سبب عدم التنفيذ أو المسوّغ
 
 
 class FormError(ValueError):
@@ -199,7 +200,9 @@ def sync_improvements(schema: dict, plan: dict, follow: dict) -> None:
         for row in merged_rows(s, plan, follow):
             st = row.get(sc["key"])
             if st in NEEDS_PLAN:
-                pending[f"{s['key']}:{row['id']}"] = f"استكمال تنفيذ ({st}): {_label(s, row)}"
+                why = next((" ".join(str(row[k]).split()) for k in REASON_KEYS if not _empty(row.get(k))), None)
+                pending[f"{s['key']}:{row['id']}"] = (f"استكمال تنفيذ ({st}): {_label(s, row)} — "
+                                                      + (f"سبب عدم التنفيذ: {why[:200]}" if why else "حدّد سبب عدم التنفيذ ثم الإجراء التصحيحي الذي يعالجه"))
     rows = follow.get("improvements") or []
     have = {r.get("_src") for r in rows if r.get("_src")}
     kept = []
@@ -237,10 +240,14 @@ def missing_for_submit(schema: dict, plan: dict, follow: dict) -> list[str]:
                 msgs.append(f"«{title}»: أضف صفاً واحداً على الأقل")
             req = [c for c in input_cols(s) if c.get("required") and not c.get("fixed")
                    and (c["phase"] == "plan" or table_phase(s) == "follow")]
+            sc = _status_col(s)
+            reason = next((c for c in s["columns"] if c["key"] in REASON_KEYS), None)
             for i, r in enumerate(rows, 1):
                 miss = [c["label"] for c in req if _empty(r.get(c["key"]))]
                 if miss:
                     msgs.append(f"«{title}» صف {i}: أكمل {('، '.join(miss))}")
+                if sc and reason and r.get(sc["key"]) == DEFERRED and _empty(r.get(reason["key"])):
+                    msgs.append(f"«{title}» صف {i}: اكتب مسوّغ التأجيل أو الإلغاء ورقم القرار في «{reason['label']}»")
         elif s["type"] == "fields":
             vals = plan.get(s["key"], {})
             miss = [c["label"] for c in s["fields"] if c.get("required") and c["phase"] == "plan" and _empty(vals.get(c["key"]))]

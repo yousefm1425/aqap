@@ -12,8 +12,40 @@ const STATUS = { draft: 'مسودة', submitted: 'بانتظار اعتماد ر
 const STATUS_CLASS = { draft: 's-draft', submitted: 's-submitted', returned: 's-returned', approved: 's-final' };
 const ACTIVE = ['open', 'external_review'];
 const KIND = { plan: 'خطة', report: 'تقرير' };
-const FU_CLASS = { 'مُنفذ': 'fu-done', 'مُنفذ جزئي': 'fu-partial', 'لم يُنفذ': 'fu-not' };
+const FU_CLASS = { 'مُنفذ': 'fu-done', 'مُنفذ جزئي': 'fu-partial', 'لم يُنفذ': 'fu-not', 'مؤجل / ملغى بقرار': 'fu-deferred' };
 const newId = () => Math.random().toString(36).slice(2, 12);
+// ------------------------------------------------------------------ استيراد صفوف ملصوقة (من Excel أو منصة الإرشاد)
+const normLabel = t => String(t ?? '').replace(/[ـً-ْ]/g, '').replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه')
+  .replace(/[٪%]/g, '%').replace(/\s+/g, ' ').trim();
+function parseTsv(text) {
+  const rows = []; let row = [], cell = '', q = false;
+  const t = String(text).replace(/\r\n?/g, '\n');
+  for (let i = 0; i < t.length; i++) {
+    const c = t[i];
+    if (q) { if (c === '"') { if (t[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += c; }
+    else if (c === '"' && cell === '') q = true;
+    else if (c === '\t') { row.push(cell); cell = ''; }
+    else if (c === '\n') { row.push(cell); rows.push(row); row = []; cell = ''; }
+    else cell += c;
+  }
+  if (cell || row.length) { row.push(cell); rows.push(row); }
+  return rows.filter(r => r.some(x => String(x).trim()));
+}
+function pastedValue(c, raw) {
+  const v = String(raw ?? '').trim();
+  if (!v || v === '—') return { v: null };
+  if (c.type === 'number') {
+    const n = Number(v.replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[٫]/g, '.').replace(/[,،%٪\s]/g, ''));
+    return Number.isFinite(n) ? { v: n } : { v: null, bad: true };
+  }
+  if (c.type === 'select') {
+    const hit = c.options.find(o => normLabel(o) === normLabel(v));
+    return hit ? { v: hit } : { v: null, bad: true };
+  }
+  if (c.type === 'url') return /^https?:\/\/\S+$/.test(v) ? { v } : { v: null, bad: true };
+  return { v };
+}
+
 const clone = o => JSON.parse(JSON.stringify(o ?? {}));
 
 function setParams(params) {
@@ -212,6 +244,85 @@ export async function renderForms() {
         recalc();
       };
       draw();
+
+      // استيراد صفوف ملصوقة: صف العناوين يُطابق بأسماء أعمدة النموذج
+      const anyEditable = s.columns.some(c => editableCol(s, c));
+      const importPasted = (text, mode) => {
+        const grid = parseTsv(text);
+        if (grid.length < 2) throw new Error('الصق الجدول مع صف العناوين ثم صف بيانات واحد على الأقل');
+        const byLabel = new Map(s.columns.filter(c => c.type !== 'computed').map(c => [normLabel(c.label), c]));
+        const map = grid[0].map(hd => byLabel.get(normLabel(hd)) ?? null);
+        const unknown = grid[0].filter((hd, i) => !map[i] && String(hd).trim());
+        if (!map.some(Boolean)) throw new Error('لم تُطابق أي عنوان عمود في الجدول؛ انسخ صف العناوين كما هو');
+        let bad = 0;
+        const items = grid.slice(1).map(r => {
+          const o = {};
+          map.forEach((c, i) => { if (!c) return; const p = pastedValue(c, r[i]); if (p.bad) bad++; o[c.key] = p.v; });
+          return o;
+        });
+        const put = (target, o, phase) => s.columns.forEach(c => {
+          if (!(c.key in o) || c.fixed || c.type === 'computed' || !editableCol(s, c)) return;
+          if (phase && c.phase !== phase) return;
+          target[c.key] = o[c.key];
+        });
+        let done = 0;
+        if (fixed) {                                       // صفوف ثابتة: تُطابق بقيم أعمدتها الثابتة
+          const keys = s.columns.filter(c => c.fixed && map.includes(c)).map(c => c.key);
+          if (!keys.length) throw new Error('هذا الجدول بصفوف ثابتة: يجب أن يتضمن الملصوق عمود التعريف (مثل «مؤشر القياس»)');
+          for (const o of items) {
+            const fr = s.fixed_rows.find(f => keys.every(k => normLabel(f[k]) === normLabel(o[k])));
+            if (!fr) continue;
+            const pr = (plan[s.key] ??= []).find(x => x.id === fr.id) ?? (plan[s.key].push({ id: fr.id }), plan[s.key].at(-1));
+            if (planEditable) put(pr, o, 'plan');
+            if (followEditable) { follow[s.key] ??= {}; follow[s.key][fr.id] ??= {}; put(follow[s.key][fr.id], o, 'follow'); }
+            done++;
+          }
+        } else if (tablePhase(s) === 'follow') {
+          const rows = items.map(o => { const r = { id: newId() }; put(r, o); return r; });
+          follow[s.key] = mode === 'replace' ? rows : [...(follow[s.key] ?? []), ...rows];
+          follow[s.key] = follow[s.key].slice(0, s.max_rows ?? 100); done = rows.length;
+        } else if (planEditable) {
+          if (mode === 'replace') { plan[s.key] = []; follow[s.key] = {}; }
+          for (const o of items) {
+            const r = { id: newId() }; put(r, o, 'plan'); plan[s.key].push(r);
+            const f = {}; put(f, o, 'follow'); if (Object.keys(f).length) { follow[s.key] ??= {}; follow[s.key][r.id] = f; }
+            done++;
+          }
+          plan[s.key] = plan[s.key].slice(0, s.max_rows ?? 100);
+        } else {                                            // التخطيط معتمد: تُحدَّث المتابعة للصفوف المطابقة
+          const keyCol = s.columns.find(c => c.phase === 'plan' && ['longtext', 'text'].includes(c.type) && map.includes(c));
+          if (!keyCol) throw new Error(`التخطيط معتمد: أضف عمود «${s.columns.find(c => c.phase === 'plan' && c.type === 'longtext')?.label ?? 'المهمة'}» لمطابقة الصفوف`);
+          for (const o of items) {
+            const r = (plan[s.key] ?? []).find(x => normLabel(x[keyCol.key]) === normLabel(o[keyCol.key]));
+            if (!r) continue;
+            follow[s.key] ??= {}; follow[s.key][r.id] ??= {}; put(follow[s.key][r.id], o, 'follow'); done++;
+          }
+        }
+        draw(); markDirty();
+        return { done, total: items.length, unknown, bad };
+      };
+      const importBtn = anyEditable && h('button', { class: 'btn small', onclick: () => {
+        const dlg = document.getElementById('dialog');
+        const area = h('textarea', { rows: 8, dir: 'auto', placeholder: 'انسخ الجدول من Excel أو من «تقارير منصة الجودة» في منصة الإرشاد مع صف العناوين، ثم الصقه هنا' });
+        const mode = h('select', { class: 'input' }, h('option', { value: 'replace' }, 'استبدال الصفوف الحالية'), h('option', { value: 'append' }, 'إضافة إلى الصفوف الحالية'));
+        const err = h('p', { class: 'faint', style: { color: 'var(--danger-ink)' } });
+        mount(dlg, h('form', { method: 'dialog', onsubmit: e => {
+          e.preventDefault();
+          try {
+            const r = importPasted(area.value, mode.value);
+            dlg.close();
+            toast(`استُورد ${num(r.done)} من ${num(r.total)} صف${r.unknown.length ? ` · أعمدة لم تُطابق: ${r.unknown.join('، ')}` : ''}${r.bad ? ` · ${num(r.bad)} قيمة غير صالحة تُركت فارغة` : ''} — راجعها ثم احفظ`);
+          } catch (ex) { err.textContent = ex.message; }
+        } },
+          h('h2', null, `استيراد صفوف ملصوقة — ${s.title}`),
+          h('p', { class: 'faint' }, 'تُطابق الأعمدة بعناوينها، فلا يلزم ترتيبها. أعمدة الحساب التلقائي تُحسب بعد الاستيراد.'),
+          !fixed && (tablePhase(s) === 'follow' || planEditable) && h('div', { class: 'field' }, h('label', null, 'طريقة الاستيراد'), mode),
+          h('div', { class: 'field' }, area, err),
+          h('div', { class: 'row end' }, h('button', { type: 'button', class: 'btn', onclick: () => dlg.close() }, 'إلغاء'),
+            h('button', { class: 'btn primary' }, 'استيراد'))));
+        dlg.showModal(); area.focus();
+      } }, 'استيراد صفوف ملصوقة');
+
       const sumEl = s.summary && h('div', { class: 'progress-line form-sum' }, s.summary.map(m => {
         const b = h('b'); live.set(`sum:${s.key}:${m.key}`, { el: b, fmt: m.format });
         return h('span', null, b, ` ${m.label}`);
@@ -222,11 +333,11 @@ export async function renderForms() {
           h('thead', null, groupRow(s.columns), h('tr', null, h('th', null, 'م'), s.columns.map(c => h('th', { class: c.type === 'computed' ? 'computed' : null }, c.label)),
             rowsEditable && h('th'))),
           tbody)),
-        rowsEditable && (s.max_rows ?? 100) > 0 && h('div', null, h('button', { class: 'btn small', onclick: () => {
+        (rowsEditable || importBtn) && h('div', { class: 'row' }, rowsEditable && (s.max_rows ?? 100) > 0 && h('button', { class: 'btn small', onclick: () => {
           if (tablePhase(s) === 'follow') (follow[s.key] ??= []).push({ id: newId() });
           else plan[s.key].push({ id: newId() });
           draw(); markDirty();
-        } }, '+ صف')),
+        } }, '+ صف'), importBtn),
         sumEl);
     }
 
