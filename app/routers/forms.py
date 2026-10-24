@@ -17,6 +17,7 @@ from .. import storage
 from ..form_templates import FRAMEWORK, TEMPLATES
 from ..forms_engine import FormError, clean_follow, clean_plan, compute, empty_plan, missing_for_submit, summary_record
 from ..forms_pdf import render_pdf
+from ..forms_xlsx import has_numbers, render_xlsx
 from ..linking import ACTIVE_CYCLE, link_to_requirement
 from ..schemas import MinutesAttachIn, MinutesTransitionIn
 from .evidence_links import assert_link_ok, assert_uploads_allowed
@@ -320,6 +321,19 @@ async def form_pdf(form_id: int, user: CurrentUser = Depends(current_user), conn
     pdf = await run_in_threadpool(render_pdf, doc)
     name = f"{doc['requirement_code']}-{doc['department_name']}.pdf"
     return Response(pdf, media_type="application/pdf", headers={"Content-Disposition": f"inline; filename*=UTF-8''{quote(name)}"})
+
+
+@router.get("/forms/{form_id}/xlsx")
+async def form_xlsx(form_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+    """نسخة Excel بهوية المؤسسة — للتقارير ذات الجداول والأرقام فقط (الصيغ حية لإعادة الحساب والرسوم البيانية)."""
+    await _load(conn, user, form_id)
+    doc = await _full(conn, form_id)
+    if not has_numbers(doc["schema"]):
+        raise HTTPException(400, "هذا النموذج لا يحتوي جداول أرقام — استخدم نسخة PDF")
+    data = await run_in_threadpool(render_xlsx, doc)
+    name = f"{doc['requirement_code']}-{doc['department_name']}.xlsx"
+    return Response(data, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(name)}"})
 
 
 # ---------------------------------------------------------------------------

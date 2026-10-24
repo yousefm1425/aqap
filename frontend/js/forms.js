@@ -513,6 +513,12 @@ export async function renderForms() {
       const b = e.currentTarget; b.disabled = true;
       try { await apiDownload(`/forms/${f.id}/pdf`, `${f.requirement_code}.pdf`); } catch (ex) { toast(ex.message, 'error'); } finally { b.disabled = false; }
     } }, '⬇ تحميل PDF'));
+    const numeric = schema.sections.some(s => s.type === 'pivot' || (s.type === 'table' && s.columns.some(c => c.type === 'number' || c.type === 'computed')));
+    if (numeric) buttons.push(h('button', { class: 'btn xlsx-btn', title: 'نسخة Excel بهوية المؤسسة: الجداول بصيغ حية لإعادة الحساب وإضافة الرسوم البيانية', onclick: async e => {
+      const b = e.currentTarget; b.disabled = true;
+      try { if (dirty && (planEditable || followEditable)) await save(true); await apiDownload(`/forms/${f.id}/xlsx`, `${f.requirement_code}.xlsx`); }
+      catch (ex) { toast(ex.message, 'error'); } finally { b.disabled = false; }
+    } }, '⬇ تحميل Excel'));
     if (f.evidence_id) buttons.push(h('button', { class: 'btn', onclick: async () => {
       try { const r = await api(`/evidence/${f.evidence_id}/download`); window.open(r.url, '_blank', 'noopener'); } catch (ex) { toast(ex.message, 'error'); }
     } }, 'النسخة المؤرشفة'));
