@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
+from urllib.parse import quote
+from starlette.concurrency import run_in_threadpool
 from psycopg import AsyncConnection, sql
 
 from ..schemas import AssessmentStatus, EvidenceLink, ExternalAssessmentPatch, SelfAssessmentPatch, TransitionIn
@@ -83,6 +85,39 @@ async def get_assessment(assessment_id: int, user: CurrentUser = Depends(current
     history = await cur.fetchall()
     eff = await conn.execute("SELECT effective_rating(%s, %s, %s) AS r", (a["self_rating"], a["ext_verdict"], requirement["na_ok"]))
     return {**a, "eff_rating": (await eff.fetchone())["r"], "requirement": requirement, "evidence": evidence, "history": history}
+
+
+@router.get("/assessments/{assessment_id}/pdf")
+async def assessment_pdf(assessment_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn)):
+    """تقرير المتطلب PDF بهوية المؤسسة — متاح لكل من يطّلع على المتطلب (القسم والجودة والمقيّمين)."""
+    from ..requirement_pdf import render_pdf
+    d = await get_assessment(assessment_id, user, conn)
+    cur = await conn.execute(
+        """SELECT d.name_ar AS department_name, c.academic_year FROM assessment_cycle c
+             LEFT JOIN department d ON d.id = %s WHERE c.id = %s""", (d["department_id"], d["cycle_id"]))
+    d.update(await cur.fetchone())
+    code = d["requirement"]["code"]
+    cur = await conn.execute(
+        """SELECT 'محضر' AS kind, 'محضر ' || t.title_ar || ' رقم ' || m.meeting_no AS title, m.status::text AS status,
+                  'AQAP-M-' || m.id AS ref
+             FROM minutes m JOIN minutes_template t ON t.id = m.template_id
+            WHERE m.cycle_id = %(c)s AND m.department_id IS NOT DISTINCT FROM %(d)s AND t.requirement_code = %(code)s
+           UNION ALL
+           SELECT CASE WHEN t.kind = 'plan' THEN 'خطة' ELSE 'تقرير' END, t.title_ar, f.status::text, 'AQAP-F-' || f.id
+             FROM form_record f JOIN form_template t ON t.id = f.template_id
+            WHERE f.cycle_id = %(c)s AND f.department_id IS NOT DISTINCT FROM %(d)s AND t.requirement_code = %(code)s""",
+        {"c": d["cycle_id"], "d": d["department_id"], "code": code})
+    d["documents"] = await cur.fetchall()
+    cur = await conn.execute(
+        """SELECT a.title_ar, a.action_ar, a.status::text AS status, a.progress_pct, a.due_date,
+                  COALESCE(a.owner_label, u.full_name_ar) AS owner
+             FROM improvement_action a LEFT JOIN app_user u ON u.id = a.owner_id
+            WHERE a.assessment_id = %s ORDER BY a.id""", (assessment_id,))
+    d["plans"] = await cur.fetchall()
+    pdf = await run_in_threadpool(render_pdf, d)
+    name = f"{code}-{d['department_name'] or 'المنشأة'}.pdf"
+    return Response(pdf, media_type="application/pdf",
+                    headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(name)}"})
 
 
 @router.patch("/assessments/{assessment_id}/self")

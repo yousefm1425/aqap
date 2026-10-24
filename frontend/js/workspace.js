@@ -1,4 +1,4 @@
-import { api } from './api.js';
+import { api, apiDownload } from './api.js';
 import { deptName, parseRoute, state, userScope } from './app.js';
 import { RATING, RATING_COLOR, RATING_ORDER, STATUS, TRANSITIONS, VERDICT, VERDICT_COLOR } from './labels.js';
 import { evidenceContext, folderButton, linkBadge, modeHint } from './evfolders.js';
@@ -189,7 +189,11 @@ export async function renderWorkspace() {
     const header = h('section', null,
       h('div', { class: 'crumbs' }, `${req.standard_code} ${req.standard_title} ‹ ${req.sub_standard_code} ${req.sub_standard_title}`),
       h('div', { class: 'row' }, h('strong', null, req.code), h('span', { class: `status s-${d.status}` }, STATUS[d.status]),
-        d.due_date && h('span', { class: 'faint' }, `الموعد: ${date(d.due_date)}`)),
+        d.due_date && h('span', { class: 'faint' }, `الموعد: ${date(d.due_date)}`),
+        h('button', { class: 'btn small pdf-btn', title: 'تقرير المتطلب بهوية المؤسسة للطباعة أو الرفع على منصة أخرى', onclick: e => {
+          const b = e.currentTarget; b.disabled = true;
+          apiDownload(`/assessments/${d.id}/pdf`, `${req.code}.pdf`).catch(ex => toast(ex.message, 'error')).finally(() => { b.disabled = false; });
+        } }, '⬇ تقرير المتطلب PDF')),
       h('p', { class: 'req-text' }, req.text_ar),
       req.guidance_ar && h('p', { class: 'muted' }, req.guidance_ar),
       req.expected_evidence_ar && h('p', { class: 'faint' }, `الشواهد المتوقعة: ${req.expected_evidence_ar}`),

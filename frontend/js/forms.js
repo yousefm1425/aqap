@@ -1,4 +1,4 @@
-import { api, apiOpen } from './api.js';
+import { api, apiDownload, apiOpen } from './api.js';
 import { deptName, parseRoute, state, userScope } from './app.js';
 import { compute, fmt, isEmpty, mergedRows, tablePhase } from './formcalc.js';
 import { dateTime, h, hasRole, mount, num, pct, promptText, toast } from './ui.js';
@@ -509,6 +509,10 @@ export async function renderForms() {
     buttons.push(h('button', { class: 'btn', onclick: async () => {
       try { if (dirty && (planEditable || followEditable)) await save(true); await apiOpen(`/forms/${f.id}/pdf`); } catch (ex) { toast(ex.message, 'error'); }
     } }, f.status === 'approved' ? 'عرض PDF' : 'معاينة PDF'));
+    buttons.push(h('button', { class: 'btn pdf-btn', title: 'ملف PDF بهوية المؤسسة للطباعة أو الرفع على منصة أخرى', onclick: async e => {
+      const b = e.currentTarget; b.disabled = true;
+      try { await apiDownload(`/forms/${f.id}/pdf`, `${f.requirement_code}.pdf`); } catch (ex) { toast(ex.message, 'error'); } finally { b.disabled = false; }
+    } }, '⬇ تحميل PDF'));
     if (f.evidence_id) buttons.push(h('button', { class: 'btn', onclick: async () => {
       try { const r = await api(`/evidence/${f.evidence_id}/download`); window.open(r.url, '_blank', 'noopener'); } catch (ex) { toast(ex.message, 'error'); }
     } }, 'النسخة المؤرشفة'));

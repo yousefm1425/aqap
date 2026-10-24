@@ -659,3 +659,4 @@ a.sreq-text:hover { color: var(--primary); text-decoration: underline; }
 .task-link.t-form { border-color: #CFE3F0; background: #F3F8FC; color: #2B6A8F; }
 .task-link.t-minutes { border-color: #EADFC6; background: #FCF8EF; color: #8A5A12; }
 
+.pdf-btn { border-color: #126C66; color: #126C66; font-weight: 600; }

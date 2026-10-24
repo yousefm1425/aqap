@@ -1,5 +1,5 @@
 import { evidenceContext, folderButton, linkBadge, modeHint } from './evfolders.js';
-import { api, apiOpen } from './api.js';
+import { api, apiDownload, apiOpen } from './api.js';
 import { deptName, parseRoute, state, userScope } from './app.js';
 import { dateTime, h, hasRole, mount, num, pct, promptText, toast } from './ui.js';
 
@@ -431,6 +431,10 @@ export async function renderMinutes() {
     buttons.push(h('button', { class: 'btn', onclick: async () => {
       try { if (dirty && editable) await save(true); await apiOpen(`/minutes/${m.id}/pdf`); } catch (ex) { toast(ex.message, 'error'); }
     } }, m.status === 'approved' ? 'عرض PDF' : 'معاينة PDF'));
+    buttons.push(h('button', { class: 'btn pdf-btn', title: 'ملف PDF بهوية المؤسسة للطباعة أو الرفع على منصة أخرى', onclick: async e => {
+      const b = e.currentTarget; b.disabled = true;
+      try { await apiDownload(`/minutes/${m.id}/pdf`, `${m.requirement_code}.pdf`); } catch (ex) { toast(ex.message, 'error'); } finally { b.disabled = false; }
+    } }, '⬇ تحميل PDF'));
     if (m.evidence_id) buttons.push(h('button', { class: 'btn', onclick: async () => {
       try { const r = await api(`/evidence/${m.evidence_id}/download`); window.open(r.url, '_blank', 'noopener'); }
       catch (ex) { toast(ex.message, 'error'); }
