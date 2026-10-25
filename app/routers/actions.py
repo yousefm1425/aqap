@@ -159,6 +159,9 @@ async def department_members(department_id: int, user: CurrentUser = Depends(cur
     """مرشحو «المسؤول عن التنفيذ»: من لهم دور فعّال في القسم."""
     if not user.can_view_department(department_id):
         raise not_found("القسم غير موجود")
+    cur = await conn.execute("SELECT 1 FROM department WHERE id = %s AND institution_id = %s", (department_id, user.institution_id))
+    if await cur.fetchone() is None:
+        raise not_found("القسم غير موجود")
     cur = await conn.execute(
         """SELECT DISTINCT u.id, u.full_name_ar FROM app_user u JOIN user_role ur ON ur.user_id = u.id
             WHERE ur.department_id = %s AND u.is_active AND u.institution_id = %s

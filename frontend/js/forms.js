@@ -91,7 +91,7 @@ export async function renderForms() {
         h('h1', null, `الخطط والتقارير — ${deptName(dept)}`),
         h('div', { class: 'progress-line' },
           h('span', null, h('b', null, `${num(approved)}/${num(templates.length)}`), ' نموذج معتمد'),
-          h('span', null, h('b', null, num(recs.length)), ' قيد العمل'),
+          h('span', null, h('b', null, num(recs.filter(r => r.status !== 'approved').length)), ' قيد العمل'),
           h('span', null, h('b', null, pct(prog.length ? (prog.reduce((a, b) => a + b, 0) / prog.length) * 100 : null)), ' متوسط التنفيذ'))),
       picker);
   }

@@ -245,7 +245,7 @@ def _table_sheet(wb, s: dict, rows: list[dict], sm: dict | None, ctx: dict, used
             if g != prev:
                 if i - 1 > start:
                     ws.merge_cells(start_row=r, start_column=start, end_row=r, end_column=i - 1)
-                cell = ws.cell(r, start, prev if isinstance(prev, str) else None)
+                ws.cell(r, start, prev if isinstance(prev, str) else None)
                 for k in range(start, i):
                     _head(ws.cell(r, k), F_GRP)
                 start, prev = i, g

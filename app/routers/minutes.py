@@ -152,6 +152,8 @@ async def create_minutes(cycle_id: int, body: MinutesCreate, user: CurrentUser =
     tpl = next((t for t in await _template_rows(conn, cycle) if t["id"] == body.template_id), None)
     if tpl is None:
         raise not_found("النموذج غير موجود في إطار هذه الدورة")
+    # يتسلسل الإنشاء لكل (دورة، قسم، نموذج) حتى لا يتصادم رقم الاجتماع عند الضغط المزدوج أو الإنشاء المتزامن
+    await conn.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", (f"minutes:{cycle_id}:{body.department_id}:{tpl['id']}",))
     cur = await conn.execute(
         """INSERT INTO minutes (cycle_id, department_id, template_id, meeting_no, title_ar, follow_up_owner, created_by)
            VALUES (%s, %s, %s, 0, %s, 'رئيس القسم', %s) RETURNING id""",

@@ -2130,6 +2130,8 @@ BEGIN
   END IF;
 END $$;
 
+DROP FUNCTION IF EXISTS purge_rows(regclass, text, int);
+
 -- 017_official_requirement_texts
 UPDATE requirement r SET text_ar = v.t
   FROM (VALUES
@@ -2193,3 +2195,31 @@ UPDATE sub_standard ss SET title_ar = v.new_title
     ('3-3', 'إدارة محتوى البرامج التدريبية', 'إدارة محتوى البرنامج التدريبي')
   ) AS v(code, old_title, new_title), standard s, framework f
  WHERE ss.code = v.code AND ss.title_ar = v.old_title AND s.id = ss.standard_id AND f.id = s.framework_id AND f.code = 'TVTC-TQ-L2';
+
+-- 019_fk_indexes
+-- فهارس لأعمدة المفاتيح الأجنبية المستخدمة في التصفية والربط (القسم، النموذج، المحضر، الدورة…). آمن للتكرار.
+CREATE INDEX IF NOT EXISTS ix_assessment_department     ON assessment (department_id);
+CREATE INDEX IF NOT EXISTS ix_assessment_requirement    ON assessment (requirement_id);
+CREATE INDEX IF NOT EXISTS ix_assessment_cycle_framework ON assessment_cycle (framework_id);
+CREATE INDEX IF NOT EXISTS ix_cycle_department_dept     ON cycle_department (department_id);
+CREATE INDEX IF NOT EXISTS ix_evidence_institution      ON evidence (institution_id);
+CREATE INDEX IF NOT EXISTS ix_evidence_folder_dept      ON evidence_folder (department_id);
+CREATE INDEX IF NOT EXISTS ix_form_record_department    ON form_record (department_id);
+CREATE INDEX IF NOT EXISTS ix_form_record_template      ON form_record (template_id);
+CREATE INDEX IF NOT EXISTS ix_form_record_evidence      ON form_record (evidence_id);
+CREATE INDEX IF NOT EXISTS ix_form_transition_form      ON form_transition (form_id);
+CREATE INDEX IF NOT EXISTS ix_minutes_department        ON minutes (department_id);
+CREATE INDEX IF NOT EXISTS ix_minutes_template          ON minutes (template_id);
+CREATE INDEX IF NOT EXISTS ix_minutes_evidence          ON minutes (evidence_id);
+CREATE INDEX IF NOT EXISTS ix_minutes_transition_minutes ON minutes_transition (minutes_id);
+CREATE INDEX IF NOT EXISTS ix_minutes_attendee_user     ON minutes_attendee (user_id);
+CREATE INDEX IF NOT EXISTS ix_improvement_action_dept   ON improvement_action (department_id);
+CREATE INDEX IF NOT EXISTS ix_improvement_action_evid   ON improvement_action (completion_evidence_id);
+CREATE INDEX IF NOT EXISTS ix_user_role_department      ON user_role (department_id);
+CREATE INDEX IF NOT EXISTS ix_user_role_cycle           ON user_role (cycle_id);
+CREATE INDEX IF NOT EXISTS ix_app_user_institution      ON app_user (institution_id);
+CREATE INDEX IF NOT EXISTS ix_requirement_exclusion_req ON requirement_exclusion (requirement_id);
+CREATE INDEX IF NOT EXISTS ix_cycle_deadline_dept       ON cycle_deadline (department_id);
+CREATE INDEX IF NOT EXISTS ix_qt_submission_dept        ON quality_task_submission (department_id);
+CREATE INDEX IF NOT EXISTS ix_trainer_department_dept   ON trainer_department (department_id);
+CREATE INDEX IF NOT EXISTS ix_external_visit_cycle      ON external_visit (cycle_id);

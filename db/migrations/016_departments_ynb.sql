@@ -76,4 +76,6 @@ BEGIN
     END LOOP;
   END IF;
 END $$;
+-- أداة الحذف المتتبع للمفاتيح لا تبقى في القاعدة بعد الاستخدام
+DROP FUNCTION IF EXISTS purge_rows(regclass, text, int);
 COMMIT;

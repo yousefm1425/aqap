@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from openpyxl import Workbook
-from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from openpyxl.styles import Alignment, Border, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from psycopg import AsyncConnection
 
