@@ -229,7 +229,20 @@ export async function renderForms() {
       if (reqOf(f) !== p.req) { toast(`هذه النتائج للمتطلب ${p.req} وليست لهذا النموذج (${reqOf(f)})`, 'error'); return; }
       const { n, skipped } = applyPackage(p);
       dropPkg();
-      await act(() => save(true), () => `طُبقت ${num(n)} قيمة من منصة الإرشاد وحُفظت. راجع النموذج ثم ارفعه للاعتماد.`
+      // روابط الشواهد (مثل لوحة المؤشرات في منصة الإرشاد) تُرفق بالنموذج مرة واحدة، وتُربط بالمتطلب عند اعتماده
+      const have = new Set(f.attachments.map(a => String(a.url || '').replace(/\/+$/, '')));
+      const links = (Array.isArray(p.evidence) ? p.evidence : [])
+        .filter(e => /^https:\/\/\S+$/.test(e?.url || '') && !have.has(e.url.replace(/\/+$/, '')) && String(e.title || '').trim().length >= 3);
+      const canAttach = f.status !== 'submitted';
+      await act(async () => {
+        await save(true);
+        let k = 0;
+        if (canAttach) for (const e of links) {
+          try { await api(`/forms/${f.id}/attachments`, { method: 'POST', body: { title_ar: String(e.title).slice(0, 300), url: e.url } }); k += 1; }
+          catch { /* رابط مرفوض: يبقى النموذج محفوظاً */ }
+        }
+        return k;
+      }, k => `طُبقت ${num(n)} قيمة من منصة الإرشاد وحُفظت${k ? `، وأُرفق ${num(k)} شاهد` : ''}. راجع النموذج ثم ارفعه للاعتماد.`
         + (skipped.length ? ` لم تُعدَّل (مغلقة في هذه المرحلة): ${skipped.slice(0, 3).join('، ')}` : ''));
     }
 
