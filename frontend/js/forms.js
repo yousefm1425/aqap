@@ -16,6 +16,19 @@ const FU_CLASS = { 'مُنفذ': 'fu-done', 'مُنفذ جزئي': 'fu-partial',
 const newId = () => Math.random().toString(36).slice(2, 12);
 const clone = o => JSON.parse(JSON.stringify(o ?? {}));
 
+// نتائج منصة الإرشاد الأكاديمي: تصل في الرابط (#/forms?req=1-3-4&import=…) أو تُلصق نصاً،
+// وتُحفظ مؤقتاً في الجلسة حتى يفتح المستخدم النموذج المطابق ويؤكد تطبيقها.
+const PKG_KEY = 'aqap.import';
+const normAr = x => String(x ?? '').replace(/[أإآ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+function decodePkg(b64) {
+  const b = b64.replace(/-/g, '+').replace(/_/g, '/');
+  const bin = atob(b + '='.repeat((4 - (b.length % 4)) % 4));
+  return JSON.parse(new TextDecoder().decode(Uint8Array.from(bin, c => c.charCodeAt(0))));
+}
+const validPkg = p => p && p.app === 'irshad' && typeof p.req === 'string' && p.sections && typeof p.sections === 'object';
+function pendingPkg() { try { const p = JSON.parse(sessionStorage.getItem(PKG_KEY) || 'null'); return validPkg(p) ? p : null; } catch { return null; } }
+const dropPkg = () => { try { sessionStorage.removeItem(PKG_KEY); } catch { /* الجلسة غير متاحة */ } };
+
 function setParams(params) {
   const qs = new URLSearchParams(Object.entries(params).filter(([, v]) => v != null && v !== '')).toString();
   history.replaceState(null, '', `#/forms${qs ? `?${qs}` : ''}`);
@@ -24,10 +37,25 @@ function setParams(params) {
 export async function renderForms() {
   const cycle = state.cycle;
   const { params } = parseRoute();
+  if (params.import) {
+    try { const p = decodePkg(params.import); if (!validPkg(p)) throw new Error(); sessionStorage.setItem(PKG_KEY, JSON.stringify(p)); }
+    catch { toast('تعذرت قراءة نتائج منصة الإرشاد من الرابط', 'error'); }
+  }
+  const pkg = pendingPkg();
   const sc = userScope();
   const deptOptions = sc.all ? state.departments.map(d => d.id) : sc.depts;
   if (!deptOptions.length) return h('div', { class: 'empty' }, 'لا يوجد قسم مسند إليك في هذه الدورة.');
   let dept = params.dept ? Number(params.dept) : deptOptions[0];
+  if (pkg?.dept && params.import) {                            // قسم الحزمة بالاسم كما في رايات
+    const want = normAr(pkg.dept);
+    const STOP = new Set(['تقنيه', 'قسم', 'مركز', 'وحده']);
+    const toks = x => new Set(normAr(x).split(' ').map(w => w.replace(/^و(?=..{2})/, '').replace(/^ال(?=.{2})/, '')).filter(w => w.length > 1 && !STOP.has(w)));
+    const wt = toks(pkg.dept);
+    const score = d => [...toks(deptName(d))].filter(w => wt.has(w)).length;
+    const best = [...deptOptions].sort((a, b) => score(b) - score(a))[0];
+    const hit = deptOptions.find(d => normAr(deptName(d)) === want) ?? (best != null && score(best) > 0 ? best : null);
+    if (hit != null) dept = hit;
+  }
   if (!deptOptions.includes(dept)) dept = deptOptions[0];
   let selected = params.t ? Number(params.t) : null;          // قالب
   let templates = [];
@@ -89,6 +117,7 @@ export async function renderForms() {
   }
 
   async function refresh() { await load(); renderHead(); renderList(); await renderDetail(); }
+  const reqOf = t => t.requirement_code.split('/')[0];
 
   async function act(fn, ok) {
     try { const r = await fn(); if (ok) toast(typeof ok === 'function' ? ok(r) : ok); await refresh(); return r; }
@@ -138,6 +167,71 @@ export async function renderForms() {
 
     const editableCol = (s, c) => !c.fixed && c.type !== 'computed'
       && (tablePhase(s) === 'follow' || c.phase === 'follow' ? followEditable : planEditable);
+
+    // تطبيق حزمة نتائج منصة الإرشاد على النموذج: الحقول، وصفوف الجداول الثابتة بمعرّفها أو بقيمها الثابتة، وإضافة صفوف للجداول المفتوحة
+    function applyPackage(p) {
+      let n = 0; const skipped = new Set();
+      const okVal = (c, v) => !(c.type === 'select' && c.options && !c.options.includes(String(v)));
+      for (const s of schema.sections) {
+        const v = p.sections[s.key];
+        if (v == null) continue;
+        if (s.type === 'fields') {
+          for (const c of s.fields) {
+            const val = v[c.key];
+            if (val == null || val === '') continue;
+            if (!(c.phase === 'plan' ? planEditable : followEditable)) { skipped.add(c.label); continue; }
+            if (!okVal(c, val)) { skipped.add(c.label); continue; }
+            (c.phase === 'plan' ? (plan[s.key] ??= {}) : (follow[s.key] ??= {}))[c.key] = String(val);
+            n += 1;
+          }
+        } else if (s.type === 'table' && Array.isArray(v)) {
+          const cols = s.columns.filter(c => !c.fixed && c.type !== 'computed');
+          if (s.fixed_rows) {
+            const rs = mergedRows(s, plan, follow);
+            const keys = s.columns.filter(c => c.fixed).map(c => c.key);
+            for (const pr of v) {
+              const row = rs.find(x => pr.id && x.id === pr.id)
+                ?? rs.find(x => keys.length && keys.every(k => pr[k] == null || normAr(x[k]) === normAr(pr[k])));
+              if (!row) continue;
+              for (const c of cols) {
+                const val = pr[c.key];
+                if (val == null || val === '') continue;
+                if (!editableCol(s, c)) { skipped.add(c.label); continue; }
+                if (okVal(c, val)) { setCell(s, row, c, String(val)); n += 1; }
+              }
+            }
+          } else if (cols.some(c => editableCol(s, c))) {
+            const pick = (pr, phase) => Object.fromEntries(cols.filter(c => editableCol(s, c) && (phase == null || (c.phase ?? 'plan') === phase)
+              && pr[c.key] != null && pr[c.key] !== '' && okVal(c, pr[c.key])).map(c => [c.key, String(pr[c.key])]));
+            const k0 = cols[0]?.key;                    // لا تُكرر صفاً موجوداً بنفس قيمة العمود الأول عند إعادة الاستيراد
+            const have = new Set(mergedRows(s, plan, follow).map(x => normAr(x[k0])).filter(Boolean));
+            const room = Math.max(0, (s.max_rows ?? 100) - mergedRows(s, plan, follow).length);
+            for (const pr of v.filter(x => !(k0 && have.has(normAr(x[k0])))).slice(0, room)) {
+              if (tablePhase(s) === 'follow') (follow[s.key] ??= []).push({ id: newId(), ...pick(pr) });
+              else {
+                const id = newId();
+                (plan[s.key] ??= []).push({ id, ...pick(pr, 'plan') });
+                const fu = pick(pr, 'follow');
+                if (Object.keys(fu).length) { follow[s.key] ??= {}; follow[s.key][id] = fu; }
+              }
+              n += 1;
+            }
+          }
+        } else if (s.type === 'text' && typeof v === 'string' && v.trim()) {
+          if (!(s.phase === 'follow' ? followEditable : planEditable)) { skipped.add(s.title); continue; }
+          (s.phase === 'follow' ? follow : plan)[s.key] = v; n += 1;
+        }
+      }
+      dirty = true;
+      return { n, skipped: [...skipped] };
+    }
+    async function importPackage(p) {
+      if (reqOf(f) !== p.req) { toast(`هذه النتائج للمتطلب ${p.req} وليست لهذا النموذج (${reqOf(f)})`, 'error'); return; }
+      const { n, skipped } = applyPackage(p);
+      dropPkg();
+      await act(() => save(true), () => `طُبقت ${num(n)} قيمة من منصة الإرشاد وحُفظت. راجع النموذج ثم ارفعه للاعتماد.`
+        + (skipped.length ? ` لم تُعدَّل (مغلقة في هذه المرحلة): ${skipped.slice(0, 3).join('، ')}` : ''));
+    }
 
     function setCell(s, row, c, value) {
       if (tablePhase(s) === 'follow') { row[c.key] = value; }
@@ -358,6 +452,13 @@ export async function renderForms() {
       f.is_provisional && h('div', { class: 'notice' }, 'نموذج مبدئي إلى أن يُعتمد النموذج الرسمي لهذا المتطلب.'),
       f.status === 'returned' && f.return_reason && h('div', { class: 'notice' }, h('strong', null, `أعاده ${last?.actor ?? ''}: `), f.return_reason),
       f.guidance_ar && h('p', { class: 'muted' }, f.guidance_ar),
+      pkg && pendingPkg() && pkg.req === reqOf(f) && h('div', { class: 'notice' },
+        h('strong', null, 'وصلت نتائج من منصة الإرشاد الأكاديمي'),
+        ` — ${pkg.dept || ''}${pkg.sem ? ` · الفصل ${pkg.sem}` : ''}${pkg.at ? ` · ${dateTime(new Date(pkg.at).toISOString())}` : ''}. `,
+        (planEditable || followEditable)
+          ? [h('button', { class: 'btn small primary', onclick: () => importPackage(pkg) }, 'تطبيق النتائج على النموذج'), ' ',
+            h('button', { class: 'btn small', onclick: () => { dropPkg(); renderDetail(); } }, 'تجاهل')]
+          : 'النموذج غير قابل للتعديل في حالته الحالية؛ أعده للتعديل أولاً.'),
       f.status === 'approved' && h('p', { class: 'faint' }, 'معتمد: بيانات التخطيط مقفلة، ويستمر تحديث المتابعة وخطط التحسين خلال الدورة.'),
       h('div', { class: 'progress-line' }, progEl && h('span', null, progEl, ' نسبة التنفيذ'), h('span', null, impEl, ' نسبة التحسين')));
 
@@ -418,6 +519,13 @@ export async function renderForms() {
     // الاعتماد
     const buttons = [];
     if (planEditable || followEditable) buttons.push(h('button', { class: 'btn', onclick: () => act(() => save()) }, 'حفظ'));
+    if ((planEditable || followEditable) && f.schema.sections.length) buttons.push(h('button', { class: 'btn', onclick: async () => {
+      const text = await promptText({ title: 'استيراد من منصة الإرشاد الأكاديمي', label: 'الصق النتائج كما نسختها بزر «نسخ النتائج» في منصة الإرشاد', confirm: 'استيراد' });
+      if (!text) return;
+      let p; try { p = JSON.parse(text); } catch { toast('النص الملصوق ليس نتائج من منصة الإرشاد', 'error'); return; }
+      if (!validPkg(p)) { toast('النص الملصوق ليس نتائج من منصة الإرشاد', 'error'); return; }
+      await importPackage(p);
+    } }, 'استيراد من منصة الإرشاد'));
     if (planEditable) buttons.push(h('button', { class: 'btn primary', onclick: () => act(() => tr('submitted'), 'رُفع النموذج لاعتماد رئيس القسم') }, 'رفع للاعتماد'));
     if (planEditable && f.status === 'draft') buttons.push(h('button', { class: 'btn danger', onclick: async () => {
       const ok = await promptText({ title: 'حذف المسودة', label: 'اكتب «حذف» للتأكيد', confirm: 'حذف' });
@@ -462,6 +570,11 @@ export async function renderForms() {
   }
 
   await load();
+  if (pkg && params.import) {                                  // افتح نموذج المتطلب الوارد ونظّف الرابط من البيانات
+    const t = templates.find(x => reqOf(x) === pkg.req);
+    if (t) selected = t.id; else toast(`لا يوجد نموذج للمتطلب ${pkg.req} في هذا القسم`, 'error');
+    setParams({ dept, t: selected });
+  }
   renderHead(); renderList(); await renderDetail();
   return view;
 }
