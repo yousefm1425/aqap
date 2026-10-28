@@ -166,3 +166,40 @@ export function fmt(v, f) {
   if (typeof v === 'number' && !Number.isInteger(v)) return String(Number(v.toFixed(2)));
   return String(v);
 }
+
+// ---------------------------------------------------------------------------
+// استيراد صفوف ملصوقة (من Excel أو من منصة الإرشاد): صف عناوين ثم صفوف مفصولة بعلامة Tab.
+// تُطابق العناوين مع تسميات الأعمدة (أو مفاتيحها)؛ العنوان المكرر يُطابق الأعمدة المتشابهة بالترتيب.
+const normLabel = s => String(s ?? '').replace(/[\u064B-\u0652\u0640\u200e\u200f]/g, '').replace(/\s+/g, ' ').trim();
+export function parsePastedTable(text, columns) {
+  const lines = String(text ?? '').replace(/\r/g, '').split('\n').filter(l => l.trim());
+  if (lines.length < 2) throw new Error('الصق صف العناوين ثم صفاً واحداً على الأقل من البيانات');
+  if (!lines[0].includes('\t')) throw new Error('لم يُعثر على أعمدة؛ انسخ الجدول من Excel أو من منصة الإرشاد كما هو');
+  const head = lines[0].split('\t').map(normLabel);
+  const used = new Set();
+  const map = head.map(lab => {
+    const c = columns.find(x => !used.has(x.key) && (normLabel(x.label) === lab || x.key === lab));
+    if (c) used.add(c.key);
+    return c ?? null;
+  });
+  if (!map.some(Boolean)) throw new Error('عناوين الأعمدة الملصوقة لا تطابق أعمدة هذا الجدول');
+  const rejected = [];
+  const rows = lines.slice(1).map((line, i) => {
+    const cells = line.split('\t'); const o = {};
+    map.forEach((c, j) => {
+      if (!c || c.type === 'computed') return;
+      let v = (cells[j] ?? '').trim();
+      if (!v) return;
+      if (c.type === 'number') {
+        const n = num(v);
+        if (n == null) { rejected.push(`صف ${i + 1}: «${c.label}» ليس رقماً`); return; }
+        v = n;
+      } else if (c.type === 'select' && !(c.options || []).includes(v)) {
+        rejected.push(`صف ${i + 1}: «${v}» ليست من خيارات «${c.label}»`); return;
+      }
+      o[c.key] = v;
+    });
+    return o;
+  }).filter(o => Object.keys(o).length);
+  return { rows, matched: map.filter(Boolean).map(c => c.label), ignored: lines[0].split('\t').filter((_, j) => !map[j]).map(x => x.trim()).filter(Boolean), rejected };
+}
