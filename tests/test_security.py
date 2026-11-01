@@ -60,3 +60,25 @@ def test_link_checker_blocks_internal_addresses():
     for url in ("http://127.0.0.1/", "http://localhost:5432/", "http://10.0.0.5/", "http://169.254.169.254/latest/meta-data",
                 "http://[::1]/", "file:///etc/passwd", "ftp://example.com/"):
         assert run(_public_host(url)) is False, url
+
+
+def test_calendar_import_rejects_bombs(client):
+    import io
+    import zipfile
+    t = client.post(f"{API}/auth/dev-token", json={"email": "dean@ynb"}).json()["access_token"]
+    h = {"Authorization": f"Bearer {t}"}
+    url = f"{API}/cycles/1/calendar/import"
+    big = client.post(url, headers=h, files={"file": ("c.csv", b"a" * (5 * 1024 * 1024 + 10), "text/csv")})
+    assert big.status_code == 413
+    # «قنبلة zip»: جزء صغير مضغوطاً وضخم بعد الفك
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("xl/worksheets/sheet1.xml", b"<a>" + b" " * (40 * 1024 * 1024) + b"</a>")
+    r = client.post(url, headers=h, files={"file": ("c.xlsx", buf.getvalue(), "application/octet-stream")})
+    assert r.status_code == 413
+    # كيانات XML (XXE / billion laughs) مرفوضة
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("xl/worksheets/sheet1.xml", '<?xml version="1.0"?><!DOCTYPE x [<!ENTITY e SYSTEM "file:///etc/passwd">]><x>&e;</x>')
+    r = client.post(url, headers=h, files={"file": ("c.xlsx", buf.getvalue(), "application/octet-stream")})
+    assert r.status_code == 422

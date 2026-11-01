@@ -8,9 +8,12 @@ import io
 import re
 import zipfile
 from datetime import date, timedelta
-from xml.etree import ElementTree as ET
+try:                                       # يمنع هجمات XML (الكيانات الخارجية وتضخيمها) في الملفات المرفوعة
+    from defusedxml import ElementTree as ET
+except ImportError:                        # pragma: no cover
+    from xml.etree import ElementTree as ET
 
-from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import Response
 from psycopg import AsyncConnection
 from pydantic import BaseModel, Field
@@ -166,27 +169,43 @@ async def template(cycle_id: int, user: CurrentUser = Depends(current_user), con
                     headers={"Content-Disposition": "attachment; filename*=UTF-8''calendar_template.csv"})
 
 
+MAX_IMPORT_BYTES = 5 * 1024 * 1024          # ملف التقويم صغير بطبيعته
+MAX_PART_BYTES = 30 * 1024 * 1024           # حد ما بعد فك الضغط لكل جزء (حماية من «قنبلة zip»)
+MAX_COLS, MAX_ROWS = 200, 5000
+
+
+def _part(z: zipfile.ZipFile, name: str) -> bytes:
+    if z.getinfo(name).file_size > MAX_PART_BYTES:
+        raise HTTPException(413, "الملف كبير جداً بعد فك ضغطه")
+    return z.read(name)
+
+
 def _xlsx_rows(raw: bytes) -> list[list[str]]:
     """قارئ xlsx مبسّط (الورقة الأولى) دون مكتبات إضافية."""
     ns = {"m": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
     with zipfile.ZipFile(io.BytesIO(raw)) as z:
         shared = []
         if "xl/sharedStrings.xml" in z.namelist():
-            for si in ET.fromstring(z.read("xl/sharedStrings.xml")).findall("m:si", ns):
+            for si in ET.fromstring(_part(z, "xl/sharedStrings.xml")).findall("m:si", ns):
                 shared.append("".join(t.text or "" for t in si.iter(f"{{{ns['m']}}}t")))
         sheet = sorted(n for n in z.namelist() if n.startswith("xl/worksheets/sheet"))[0]
         rows = []
-        for row in ET.fromstring(z.read(sheet)).iter(f"{{{ns['m']}}}row"):
+        for n_row, row in enumerate(ET.fromstring(_part(z, sheet)).iter(f"{{{ns['m']}}}row")):
+            if n_row >= MAX_ROWS:
+                break
             cells = {}
             for c in row.findall("m:c", ns):
                 col = re.match(r"[A-Z]+", c.get("r", "A")).group(0)
                 idx = 0
-                for ch in col:
+                for ch in col[:3]:
                     idx = idx * 26 + ord(ch) - 64
+                if len(col) > 3 or idx > MAX_COLS:
+                    continue                    # أعمدة خارج نطاق التقويم
                 v = c.find("m:v", ns)
                 t = c.get("t")
                 if t == "s" and v is not None:
-                    val = shared[int(v.text)]
+                    k = int(v.text) if (v.text or "").isdigit() else -1
+                    val = shared[k] if 0 <= k < len(shared) else ""
                 elif t == "inlineStr":
                     val = "".join(x.text or "" for x in c.iter(f"{{{ns['m']}}}t"))
                 else:
@@ -216,9 +235,14 @@ async def import_calendar(cycle_id: int, file: UploadFile = File(...), user: Cur
                           conn: AsyncConnection = Depends(get_conn, scope="function")):
     cycle = await load_cycle(conn, user, cycle_id)
     _manager(user, cycle_id)
-    raw = await file.read()
+    raw = await file.read(MAX_IMPORT_BYTES + 1)
+    if len(raw) > MAX_IMPORT_BYTES:
+        raise HTTPException(413, "ملف التقويم أكبر من 5 ميجابايت")
     if raw[:2] == b"PK":
-        rows = _xlsx_rows(raw)
+        try:
+            rows = _xlsx_rows(raw)
+        except (zipfile.BadZipFile, KeyError, IndexError, ValueError, ET.ParseError):
+            raise HTTPException(422, "ملف Excel غير صالح أو تالف")
     else:
         text = raw.decode("utf-8-sig", errors="replace")
         rows = list(csv.reader(io.StringIO(text)))
