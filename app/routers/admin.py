@@ -6,7 +6,7 @@
 """
 from datetime import date
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from psycopg import AsyncConnection
 from pydantic import BaseModel, Field
 
@@ -28,6 +28,7 @@ class UserIn(BaseModel):
 
 class UserPatch(BaseModel):
     full_name_ar: str | None = Field(None, min_length=3, max_length=200)
+    email: str | None = Field(None, pattern=r"^[^@\s]+@[^@\s]+$", max_length=200)
     is_active: bool | None = None
 
 
@@ -119,6 +120,13 @@ async def patch_user(user_id: int, body: UserPatch, user: CurrentUser = Depends(
     await _actor(conn, user)
     if body.full_name_ar is not None:
         await conn.execute("UPDATE app_user SET full_name_ar = %s WHERE id = %s", (body.full_name_ar.strip(), user_id))
+    if body.email is not None:
+        email = body.email.strip().lower()
+        cur = await conn.execute("SELECT 1 FROM app_user WHERE lower(email) = %s AND id <> %s", (email, user_id))
+        if await cur.fetchone():
+            raise HTTPException(status.HTTP_409_CONFLICT, "هذا البريد مسجّل لحساب آخر")
+        # تغيير البريد ينهي جلسات المستخدم الحالية (الجلسة مرتبطة بالبريد)، وكلمة المرور تبقى كما هي
+        await conn.execute("UPDATE app_user SET email = %s WHERE id = %s", (email, user_id))
     if body.is_active is not None:
         await conn.execute("UPDATE app_user SET is_active = %s WHERE id = %s", (body.is_active, user_id))
     return {"updated": True}

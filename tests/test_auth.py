@@ -128,3 +128,16 @@ def test_prod_disables_dev_tokens(client, auth, monkeypatch):
     r = client.post(f"{API}/auth/login", json={"email": "t.change@ynb", "password": "Another2026"})
     assert r.status_code == 200 and client.get(f"{API}/me", headers=_bearer(r.json()["access_token"])).status_code == 200
     assert "dev_link" not in client.post(f"{API}/auth/forgot", json={"email": "t.invite@ynb"}).json()
+
+
+def test_admin_changes_email(client, auth):
+    uid, token = _new_user(client, auth, "t.mail@ynb", "مدرب البريد")
+    tok = client.post(f"{API}/auth/reset", json={"token": token, "password": GOOD}).json()["access_token"]
+    # البريد مأخوذ ← 409
+    assert client.patch(f"{API}/users/{uid}", json={"email": "dean@ynb"}, headers=auth(DEAN)).status_code == 409
+    assert client.patch(f"{API}/users/{uid}", json={"email": "bad-email"}, headers=auth(DEAN)).status_code == 422
+    assert client.patch(f"{API}/users/{uid}", json={"email": "T.Mail2@YNB"}, headers=auth(DEAN)).status_code == 200
+    assert client.get(f"{API}/me", headers=_bearer(tok)).status_code == 403            # الجلسة القديمة مرتبطة بالبريد القديم
+    assert client.post(f"{API}/auth/login", json={"email": "t.mail@ynb", "password": GOOD}).status_code == 401
+    r = client.post(f"{API}/auth/login", json={"email": "t.mail2@ynb", "password": GOOD})
+    assert r.status_code == 200 and client.get(f"{API}/me", headers=_bearer(r.json()["access_token"])).json()["email"] == "t.mail2@ynb"
