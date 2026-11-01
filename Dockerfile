@@ -14,7 +14,7 @@ COPY app ./app
 COPY frontend ./frontend
 COPY scripts ./scripts
 COPY db ./db
-RUN useradd --create-home --uid 10001 aqap && chown -R aqap /srv
+RUN useradd --create-home --uid 10001 aqap && mkdir -p /srv/_storage && chown -R aqap /srv
 USER aqap
 EXPOSE 8000
 # يهيئ القاعدة (المخطط أو الترحيلات) ثم يشغّل الخادم؛ Render يحدد المنفذ في PORT

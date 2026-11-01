@@ -22,7 +22,7 @@ export async function api(path, { method = 'GET', body, form } = {}) {
   else if (body !== undefined) { headers['Content-Type'] = 'application/json'; payload = JSON.stringify(body); }
 
   const res = await fetch(BASE + path, { method, headers, body: payload });
-  if (res.status === 401) {
+  if (res.status === 401 && !path.startsWith('/auth/')) {   // خطأ كلمة المرور في شاشة الدخول ليس انتهاء جلسة
     setToken(null);
     window.dispatchEvent(new Event('aqap:logout'));
     throw new ApiError(401, 'انتهت الجلسة، سجّل الدخول مجدداً');

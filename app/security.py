@@ -59,12 +59,25 @@ class CurrentUser:
         return all_depts or (department_id is not None and department_id in depts)
 
 
-def issue_dev_token(subject: str, hours: int = 8) -> str:
+def issue_token(subject: str, pv: int | None = None, hours: int | None = None) -> str:
+    """رمز جلسة HS256. pv = لحظة آخر تغيير لكلمة المرور؛ يبطل الرمز تلقائياً إن تغيّرت."""
     now = datetime.now(timezone.utc)
-    payload = {"sub": subject, "aud": settings.jwt_audience, "iat": now, "exp": now + timedelta(hours=hours)}
+    payload = {"sub": subject, "aud": settings.jwt_audience, "iat": now,
+               "exp": now + timedelta(hours=hours or settings.token_hours)}
+    if pv is not None:
+        payload["pv"] = pv
     if settings.jwt_issuer:
         payload["iss"] = settings.jwt_issuer
     return jwt.encode(payload, settings.jwt_secret, algorithm="HS256")
+
+
+def issue_dev_token(subject: str, hours: int = 8) -> str:
+    return issue_token(subject, hours=hours)
+
+
+def password_version(changed_at: datetime | None) -> int | None:
+    # بدقة الميكروثانية حتى لا يتطابق تغييران في الثانية نفسها
+    return round(changed_at.timestamp() * 1_000_000) if changed_at else None
 
 
 def _decode(token: str) -> dict:
@@ -89,12 +102,22 @@ async def current_user(creds: HTTPAuthorizationCredentials | None = Depends(_bea
 
     async with db.transaction() as conn:
         cur = await conn.execute(
-            """SELECT id, email, full_name_ar, institution_id FROM app_user
-                WHERE is_active AND (sso_subject = %(s)s OR lower(email) = lower(%(s)s))""",
+            """SELECT u.id, u.email, u.full_name_ar, u.institution_id, c.changed_at AS pw_changed_at
+                 FROM app_user u LEFT JOIN user_credential c ON c.user_id = u.id
+                WHERE u.is_active AND (u.sso_subject = %(s)s OR lower(u.email) = lower(%(s)s))""",
             {"s": claims["sub"]})
         row = await cur.fetchone()
         if row is None:
             raise HTTPException(status.HTTP_403_FORBIDDEN, "الحساب غير مسجل أو غير مفعّل")
+        pw_changed_at = row.pop("pw_changed_at")
+        if _jwks_client is None:
+            # رموز كلمة المرور تحمل pv؛ تغيير كلمة المرور يبطل كل الجلسات السابقة.
+            # رموز التطوير بلا pv مقبولة خارج الإنتاج فقط.
+            if "pv" in claims:
+                if claims["pv"] != password_version(pw_changed_at):
+                    raise unauthorized
+            elif settings.env == "prod":
+                raise unauthorized
         cur = await conn.execute(
             """SELECT role::text, department_id, cycle_id FROM user_role
                 WHERE user_id = %s AND current_date BETWEEN valid_from AND COALESCE(valid_to, 'infinity'::date)""",

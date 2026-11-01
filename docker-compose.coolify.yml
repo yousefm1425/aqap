@@ -1,0 +1,76 @@
+# نشر منصة الجودة على Coolify (Build Pack: Docker Compose).
+# كلمات المرور والمفتاح السري تولّدها Coolify تلقائياً (متغيرات SERVICE_*) وتحفظها؛ لا تُكتب هنا ولا في Git.
+# القيم التي تعدّلها من واجهة Coolify (Environment Variables): AQAP_PUBLIC_URL وإعدادات البريد AQAP_SMTP_* وAQAP_MAIL_FROM.
+# الدومين: من إعدادات الخدمة api ضع https://quality.ymmm.io:8000 (الرقم منفذ الحاوية، لا يظهر للمستخدم).
+
+services:
+  api:
+    build: .
+    restart: unless-stopped
+    environment:
+      - SERVICE_FQDN_API_8000
+      - AQAP_ENV=prod
+      - AQAP_DATABASE_URL=postgresql://${SERVICE_USER_POSTGRES}:${SERVICE_PASSWORD_POSTGRES}@db:5432/aqap
+      - AQAP_JWT_SECRET=${SERVICE_PASSWORD_64_JWT}
+      - AQAP_JWT_AUDIENCE=aqap
+      - AQAP_PUBLIC_URL=${AQAP_PUBLIC_URL:-https://quality.ymmm.io}
+      - AQAP_STORAGE_BACKEND=local
+      - AQAP_LOCAL_STORAGE_DIR=/srv/_storage
+      - AQAP_SEED_DEMO=${AQAP_SEED_DEMO:-0}
+      - AQAP_SMTP_HOST=${AQAP_SMTP_HOST:-smtp-relay.brevo.com}
+      - AQAP_SMTP_PORT=${AQAP_SMTP_PORT:-587}
+      - AQAP_SMTP_USER=${AQAP_SMTP_USER:-}
+      - AQAP_SMTP_PASSWORD=${AQAP_SMTP_PASSWORD:-}
+      - AQAP_MAIL_FROM=${AQAP_MAIL_FROM:-}
+    volumes:
+      - evidence:/srv/_storage
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4)"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 90s
+
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${SERVICE_USER_POSTGRES}
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - POSTGRES_DB=aqap
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d aqap"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # نسخة احتياطية يومية لقاعدة البيانات داخل السيرفر: آخر 7 أيام و4 أسابيع و6 أشهر
+  backup:
+    image: prodrigestivill/postgres-backup-local:16
+    restart: unless-stopped
+    environment:
+      - POSTGRES_HOST=db
+      - POSTGRES_DB=aqap
+      - POSTGRES_USER=${SERVICE_USER_POSTGRES}
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - SCHEDULE=0 2 * * *
+      - TZ=Asia/Riyadh
+      - BACKUP_KEEP_DAYS=7
+      - BACKUP_KEEP_WEEKS=4
+      - BACKUP_KEEP_MONTHS=6
+      - HEALTHCHECK_PORT=8080
+    volumes:
+      - backups:/backups
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  evidence:
+  backups:

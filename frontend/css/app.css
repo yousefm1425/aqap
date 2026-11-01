@@ -61,7 +61,7 @@ main { max-width: 1320px; margin: 0 auto; padding: 1.5rem; }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
 .field { display: flex; flex-direction: column; gap: .3rem; }
 .field label { font-size: .85rem; color: var(--ink-2); }
-input[type=text], input[type=email], textarea, select.input {
+input[type=text], input[type=email], input[type=password], textarea, select.input {
   border: 1px solid var(--line); border-radius: var(--radius); padding: .5rem .65rem; background: var(--surface); width: 100%; }
 textarea { min-height: 5.5rem; resize: vertical; }
 
@@ -661,3 +661,20 @@ a.sreq-text:hover { color: var(--primary); text-decoration: underline; }
 
 .pdf-btn { border-color: #126C66; color: #126C66; font-weight: 600; }
 .xlsx-btn { border-color:#1D6F42; color:#1D6F42; font-weight:600; }
+
+/* الدخول وكلمة المرور */
+.auth-form { display: flex; flex-direction: column; gap: .75rem; }
+.auth-title { font-size: 1.1rem; margin: 0; }
+.auth-link { text-align: center; font-size: .9rem; }
+.pw-wrap { position: relative; display: flex; }
+.pw-wrap input { flex: 1; min-width: 0; width: 100%; padding-inline-start: 4rem; }
+.pw-toggle { position: absolute; inset-inline-start: .35rem; top: 50%; transform: translateY(-50%); border: 0; background: none;
+  color: var(--primary); font: inherit; font-size: .8rem; cursor: pointer; padding: .25rem .4rem; }
+.ok-box { background: var(--ok-bg, #e6f4ee); color: var(--ok-ink, #1E7F55); padding: .6rem .8rem; border-radius: var(--radius); }
+.dev-login { border-top: 1px dashed var(--line, #e3ecea); padding-top: .75rem; font-size: .875rem; }
+.dev-login summary { cursor: pointer; color: var(--muted, #5b6b66); }
+.dev-login .btn { margin-top: .5rem; }
+.topbar .user .pw-link { color: inherit; font-size: .85rem; opacity: .85; }
+.pw-card { max-width: 28rem; }
+.users-table .row-actions { display: flex; gap: .4rem; flex-wrap: wrap; }
+@media (max-width: 480px) { .login { margin: 1.5rem 1rem; padding: 1.25rem; } }
