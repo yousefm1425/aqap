@@ -1,5 +1,5 @@
 // إدارة المستخدمين والصلاحيات (وكيل الجودة ومدير النظام)
-import { api } from './api.js';
+import { api, setToken } from './api.js';
 import { deptName, go, parseRoute, state } from './app.js';
 import { ROLE } from './labels.js';
 import { h, mount, num, toast } from './ui.js';
@@ -79,6 +79,38 @@ export async function renderUsers() {
     field.select();
   };
 
+  // تعديل الاسم والبريد
+  const editUser = u => {
+    const dlg = document.getElementById('dialog');
+    const n = h('input', { type: 'text', id: 'eu-name', value: u.full_name_ar });
+    const e = h('input', { type: 'email', id: 'eu-email', dir: 'ltr', value: u.email });
+    const err = h('div');
+    const form = h('form', { method: 'dialog', onsubmit: async ev => {
+      ev.preventDefault();
+      const body = {};
+      if (n.value.trim() !== u.full_name_ar) body.full_name_ar = n.value.trim();
+      if (e.value.trim().toLowerCase() !== u.email) body.email = e.value.trim();
+      if (!Object.keys(body).length) { dlg.close(); return; }
+      try {
+        await api(`/users/${u.id}`, { method: 'PATCH', body });
+        dlg.close();
+        if (u.id === state.me.id && body.email) { toast('تغيّر بريدك — سجّل الدخول بالبريد الجديد وكلمة المرور نفسها'); setToken(null); window.dispatchEvent(new Event('aqap:logout')); return; }
+        toast('حُفظت بيانات المستخدم'); reload();
+      } catch (ex) { mount(err, h('div', { class: 'error-box' }, ex.message)); }
+    } },
+      h('h2', null, 'تعديل بيانات المستخدم'),
+      h('div', { class: 'field' }, h('label', { for: 'eu-name' }, 'الاسم الكامل'), n),
+      h('div', { class: 'field' }, h('label', { for: 'eu-email' }, 'البريد الإلكتروني'), e),
+      h('p', { class: 'faint' }, 'تغيير البريد ينهي جلسات المستخدم الحالية؛ يدخل بعدها بالبريد الجديد وكلمة المرور نفسها.'),
+      err,
+      h('div', { class: 'row end' },
+        h('button', { type: 'button', class: 'btn', onclick: () => dlg.close() }, 'إلغاء'),
+        h('button', { class: 'btn primary' }, 'حفظ')));
+    mount(dlg, form);
+    dlg.showModal();
+    n.focus();
+  };
+
   const row = u => h('tr', { class: u.is_active ? '' : 'inactive' },
     h('td', null, h('b', null, u.full_name_ar), h('div', { class: 'faint', dir: 'ltr', style: { textAlign: 'end' } }, u.email)),
     h('td', null, h('div', { class: 'chips' }, u.roles.length ? u.roles.map(roleChip) : h('span', { class: 'faint' }, 'بلا صلاحيات'),
@@ -86,6 +118,7 @@ export async function renderUsers() {
     h('td', null, h('span', { class: `status ${u.is_active ? 's-final' : 'a-revision'}` }, u.is_active ? 'نشط' : 'موقوف'),
       h('div', { class: 'faint', style: { fontSize: '.8rem', marginTop: '.25rem' } }, u.has_password ? 'كلمة المرور معيّنة' : 'لم يعيّن كلمة المرور بعد')),
     h('td', null, h('div', { class: 'row-actions' },
+      h('button', { class: 'btn small', onclick: () => editUser(u) }, 'تعديل'),
       u.is_active && h('button', { class: 'btn small', title: 'يرسل للمستخدم رابطاً لتعيين كلمة المرور (للحساب الجديد أو لمن نسيها)',
         onclick: () => invite(u) }, u.has_password ? 'رابط إعادة التعيين' : 'إرسال رابط التفعيل'),
       h('button', { class: `btn small${u.is_active ? ' danger' : ''}`, onclick: () => run(
