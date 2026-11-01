@@ -54,14 +54,43 @@ export async function renderUsers() {
     `${ROLE[r.role] ?? r.role}${r.department_id ? ` · ${r.department_name ?? deptName(r.department_id)}` : ''}${r.valid_to ? ` · حتى ${r.valid_to}` : ''}`,
     h('button', { 'aria-label': 'سحب الدور', title: 'سحب الدور', onclick: () => run(() => api(`/roles/${r.id}`, { method: 'DELETE' }), 'سُحب الدور') }, '×'));
 
+  // رابط تعيين كلمة المرور: يُرسل بالبريد، أو يُعرض لنسخه ومشاركته إن لم يكن البريد مهيأً
+  const invite = async (u, created = false) => {
+    try {
+      const r = await api(`/users/${u.id}/invite`, { method: 'POST' });
+      if (r.sent) { toast(`${created ? 'أُضيف المستخدم و' : ''}أُرسل رابط تعيين كلمة المرور إلى ${u.email}`); reload(); return; }
+      showLink(u, r);
+    } catch (ex) { toast(ex.message, 'error'); }
+  };
+  const showLink = (u, r) => {
+    const dlg = document.getElementById('dialog');
+    const field = h('input', { type: 'text', dir: 'ltr', readonly: true, value: r.link, style: { width: '100%' } });
+    mount(dlg, h('form', { method: 'dialog' },
+      h('h2', null, 'رابط تعيين كلمة المرور'),
+      h('p', null, `البريد الصادر غير مهيأ بعد، فلم يُرسل الرابط تلقائياً. انسخه وأرسله إلى ${u.full_name_ar} بنفسك (رسالة خاصة، لا في مجموعة).`),
+      field,
+      h('p', { class: 'faint' }, `صالح ${r.expires_hours} ساعة ولمرة واحدة.`),
+      h('div', { class: 'row end' },
+        h('button', { type: 'button', class: 'btn', onclick: async () => {
+          try { await navigator.clipboard.writeText(r.link); toast('نُسخ الرابط'); } catch { field.select(); }
+        } }, 'نسخ'),
+        h('button', { class: 'btn primary', onclick: () => reload() }, 'تم'))));
+    dlg.showModal();
+    field.select();
+  };
+
   const row = u => h('tr', { class: u.is_active ? '' : 'inactive' },
     h('td', null, h('b', null, u.full_name_ar), h('div', { class: 'faint', dir: 'ltr', style: { textAlign: 'end' } }, u.email)),
     h('td', null, h('div', { class: 'chips' }, u.roles.length ? u.roles.map(roleChip) : h('span', { class: 'faint' }, 'بلا صلاحيات'),
       h('button', { class: 'btn small', onclick: () => roleDialog(u, data.can_grant_admin, reload) }, '+ دور'))),
-    h('td', null, h('span', { class: `status ${u.is_active ? 's-final' : 'a-revision'}` }, u.is_active ? 'نشط' : 'موقوف')),
-    h('td', null, h('button', { class: `btn small${u.is_active ? ' danger' : ''}`, onclick: () => run(
+    h('td', null, h('span', { class: `status ${u.is_active ? 's-final' : 'a-revision'}` }, u.is_active ? 'نشط' : 'موقوف'),
+      h('div', { class: 'faint', style: { fontSize: '.8rem', marginTop: '.25rem' } }, u.has_password ? 'كلمة المرور معيّنة' : 'لم يعيّن كلمة المرور بعد')),
+    h('td', null, h('div', { class: 'row-actions' },
+      u.is_active && h('button', { class: 'btn small', title: 'يرسل للمستخدم رابطاً لتعيين كلمة المرور (للحساب الجديد أو لمن نسيها)',
+        onclick: () => invite(u) }, u.has_password ? 'رابط إعادة التعيين' : 'إرسال رابط التفعيل'),
+      h('button', { class: `btn small${u.is_active ? ' danger' : ''}`, onclick: () => run(
       () => api(`/users/${u.id}`, { method: 'PATCH', body: { is_active: !u.is_active } }), u.is_active ? 'أُوقف الحساب' : 'فُعّل الحساب') },
-      u.is_active ? 'إيقاف' : 'تفعيل')));
+      u.is_active ? 'إيقاف' : 'تفعيل'))));
 
   return h('div', { class: 'scope-page' },
     h('header', { class: 'scope-hero' },
@@ -70,9 +99,13 @@ export async function renderUsers() {
       h('div', { class: 'scope-stats' }, h('span', null, h('b', null, num(data.users.length)), ' مستخدم'),
         h('span', null, h('b', null, num(active)), ' نشط'))),
     h('section', { class: 'panel' }, h('header', null, h('h2', null, 'إضافة مستخدم')),
-      h('div', { class: 'guide-form' }, name, email, h('button', { class: 'btn primary', onclick: () => run(
-        () => api('/users', { method: 'POST', body: { email: email.value.trim(), full_name_ar: name.value.trim() } }), 'أُضيف المستخدم — أسند له دوراً') }, 'إضافة')),
-      h('p', { class: 'faint' }, 'يدخل المستخدم ببريده الرسمي عبر الدخول الموحّد للمؤسسة، ولا تُحفظ كلمات مرور في المنصة.')),
+      h('div', { class: 'guide-form' }, name, email, h('button', { class: 'btn primary', onclick: async () => {
+        try {
+          const r = await api('/users', { method: 'POST', body: { email: email.value.trim(), full_name_ar: name.value.trim() } });
+          await invite({ id: r.id, email: email.value.trim(), full_name_ar: name.value.trim() }, true);
+        } catch (ex) { toast(ex.message, 'error'); }
+      } }, 'إضافة')),
+      h('p', { class: 'faint' }, 'يصل المستخدم الجديد بريد فيه رابط لتعيين كلمة المرور، ثم يدخل ببريده وكلمة مروره. أسند له دوره حتى يرى صفحات قسمه.')),
     h('section', { class: 'panel' },
       h('header', null, h('h2', null, `المستخدمون (${num(users.length)})`), search),
       h('div', { class: 'table-wrap' }, h('table', { class: 'data users-table' },

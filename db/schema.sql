@@ -2223,3 +2223,26 @@ CREATE INDEX IF NOT EXISTS ix_cycle_deadline_dept       ON cycle_deadline (depar
 CREATE INDEX IF NOT EXISTS ix_qt_submission_dept        ON quality_task_submission (department_id);
 CREATE INDEX IF NOT EXISTS ix_trainer_department_dept   ON trainer_department (department_id);
 CREATE INDEX IF NOT EXISTS ix_external_visit_cycle      ON external_visit (cycle_id);
+
+-- 020_password_auth
+-- الدخول بالبريد وكلمة المرور واستعادتها بالبريد. آمن للتكرار.
+-- كلمات المرور في جدول مستقل عن app_user حتى لا تدخل تجزئتها سجل التدقيق.
+CREATE TABLE IF NOT EXISTS user_credential (
+  user_id        bigint PRIMARY KEY REFERENCES app_user(id) ON DELETE CASCADE,
+  password_hash  text NOT NULL,
+  changed_at     timestamptz NOT NULL DEFAULT now(),
+  failed_count   int NOT NULL DEFAULT 0,
+  locked_until   timestamptz,
+  last_login_at  timestamptz
+);
+-- روابط لمرة واحدة: استعادة كلمة المرور، ودعوة حساب جديد لتعيينها. تُحفظ بصمة الرمز فقط.
+CREATE TABLE IF NOT EXISTS auth_token (
+  id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  user_id     bigint NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+  purpose     text NOT NULL CHECK (purpose IN ('reset', 'invite')),
+  token_hash  text NOT NULL UNIQUE,
+  expires_at  timestamptz NOT NULL,
+  used_at     timestamptz,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS ix_auth_token_user ON auth_token (user_id);

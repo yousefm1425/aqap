@@ -10,12 +10,14 @@ from pydantic import BaseModel
 from . import db, storage
 from .config import settings
 from .errors import register_error_handlers
-from .routers import actions, admin, applicability, assessments, calendar, evidence_links, cycles, evidence, exports, forms, minutes, quality_works, reports, college, patterns, attendance, enrollment
+from .routers import auth, actions, admin, applicability, assessments, calendar, evidence_links, cycles, evidence, exports, forms, minutes, quality_works, reports, college, patterns, attendance, enrollment
 from .security import CurrentUser, current_user, get_conn, issue_dev_token
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    if settings.env == "prod" and (len(settings.jwt_secret) < 32 or settings.jwt_secret.startswith("change-me")):
+        raise RuntimeError("AQAP_JWT_SECRET ضعيف أو افتراضي — عيّن قيمة عشوائية طويلة (32 خانة فأكثر) قبل التشغيل")
     await db.open_pool(settings.database_url)
     storage.init_storage()
     async with db.transaction() as conn:                 # قوالب النماذج من الكود (إصدار جديد عند التغيير فقط)
@@ -27,7 +29,7 @@ async def lifespan(_: FastAPI):
 app = FastAPI(title="AQAP API", version="0.1.0",
               description="واجهة برمجية لمنصة إدارة الجودة والاعتماد الأكاديمي", lifespan=lifespan)
 register_error_handlers(app)
-for r in (cycles.router, assessments.router, evidence.router, actions.router, reports.router, exports.router, minutes.router, forms.router,
+for r in (auth.router, cycles.router, assessments.router, evidence.router, actions.router, reports.router, exports.router, minutes.router, forms.router,
           applicability.router, calendar.router, evidence_links.router, admin.router, quality_works.router, college.router, patterns.router, attendance.router, enrollment.router):
     app.include_router(r, prefix="/api/v1")
 

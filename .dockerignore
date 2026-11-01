@@ -1,0 +1,11 @@
+.git
+.github
+**/__pycache__
+.pytest_cache
+.venv
+venv
+.env
+_storage
+tests
+docs
+templates/*.xlsb

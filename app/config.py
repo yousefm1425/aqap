@@ -14,6 +14,23 @@ class Settings(BaseSettings):
     jwt_audience: str = "aqap"
     jwt_issuer: str | None = None
     jwks_url: str | None = None
+    token_hours: int = 10                     # مدة جلسة الدخول بالبريد وكلمة المرور
+
+    # الدخول بالبريد وكلمة المرور واستعادتها بالبريد
+    public_url: str = "http://localhost:8000"  # عنوان المنصة كما يراه المستخدم (لروابط البريد)
+    login_max_failures: int = 5               # محاولات خاطئة متتالية قبل الإيقاف المؤقت
+    login_lock_minutes: int = 15
+    reset_token_minutes: int = 60             # صلاحية رابط استعادة كلمة المرور
+    invite_token_hours: int = 72              # صلاحية رابط تعيين كلمة المرور لحساب جديد
+
+    # البريد الصادر (SMTP) — مثل Brevo: smtp-relay.brevo.com:587
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_user: str | None = None
+    smtp_password: str | None = None
+    smtp_starttls: bool = True
+    mail_from: str | None = None              # مثل: no-reply@ymmm.io (مُوثَّق لدى مزوّد البريد)
+    mail_from_name: str = "منصة الجودة والاعتماد"
 
     # تخزين الشواهد
     storage_backend: Literal["minio", "local"] = "minio"

@@ -10,7 +10,10 @@ from fastapi import APIRouter, Depends
 from psycopg import AsyncConnection
 from pydantic import BaseModel, Field
 
+from ..config import settings
+from ..mailer import mail_configured
 from ..security import CurrentUser, current_user, forbid, get_conn, not_found
+from .auth import create_link_token, link_url, send_link
 
 router = APIRouter(tags=["الإدارة"])
 MANAGERS = ("quality_dean", "system_admin")
@@ -67,6 +70,7 @@ async def list_users(user: CurrentUser = Depends(current_user), conn: AsyncConne
     _manager(user)
     cur = await conn.execute(
         """SELECT u.id, u.email, u.full_name_ar, u.is_active, u.created_at,
+                  EXISTS (SELECT 1 FROM user_credential c WHERE c.user_id = u.id) AS has_password,
                   COALESCE(json_agg(json_build_object('id', r.id, 'role', r.role, 'department_id', r.department_id,
                            'department_name', d.name_ar, 'cycle_id', r.cycle_id, 'valid_to', r.valid_to)
                            ORDER BY r.id) FILTER (WHERE r.id IS NOT NULL), '[]') AS roles
@@ -88,6 +92,21 @@ async def create_user(body: UserIn, user: CurrentUser = Depends(current_user), c
         "INSERT INTO app_user (institution_id, email, full_name_ar) VALUES (%s, lower(%s), %s) RETURNING id",
         (user.institution_id, body.email, body.full_name_ar.strip()))
     return {"id": (await cur.fetchone())["id"]}
+
+
+@router.post("/users/{user_id}/invite")
+async def invite_user(user_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
+    """يرسل للمستخدم رابط تعيين كلمة المرور (للحساب الجديد أو لمن نسيها). إن لم يكن البريد مهيأً يُعاد الرابط لمشاركته يدوياً."""
+    _manager(user)
+    target = await _own_user(conn, user, user_id)
+    if not target["is_active"]:
+        raise forbid("الحساب موقوف؛ فعّله أولاً")
+    cur = await conn.execute("SELECT 1 FROM user_credential WHERE user_id = %s", (user_id,))
+    purpose = "reset" if await cur.fetchone() else "invite"
+    raw = await create_link_token(conn, user_id, "invite")   # مدة الدعوة أطول من الاستعادة
+    sent = await send_link(target, raw, "invite" if purpose == "invite" else "reset")
+    return {"sent": sent, "link": None if sent else link_url(raw),
+            "mail_configured": mail_configured(), "expires_hours": settings.invite_token_hours}
 
 
 @router.patch("/users/{user_id}")
