@@ -15,6 +15,7 @@ from .. import storage
 from ..linking import link_to_requirement
 from ..minutes_pdf import render_pdf
 from ..schemas import FollowUpIn, MinutesAttachIn, MinutesCreate, MinutesDoc, MinutesTransitionIn
+from .evidence import link_evidence_id
 from .evidence_links import assert_uploads_allowed
 from ..security import CurrentUser, current_user, forbid, get_conn, load_cycle, not_found
 
@@ -379,12 +380,9 @@ async def attach(minutes_id: int, body: MinutesAttachIn, user: CurrentUser = Dep
             raise not_found("الشاهد غير موجود")
         ev_id = body.evidence_id
     else:
-        cur = await conn.execute(
-            """INSERT INTO evidence (institution_id, department_id, title_ar, description_ar, kind, url, created_by)
-               VALUES (%s, %s, %s, %s, 'link', %s, %s) RETURNING id""",
-            (user.institution_id, m["department_id"], body.title_ar,
-             f"شاهد داعم لمحضر AQAP-M-{minutes_id}", str(body.url), user.id))
-        ev_id = (await cur.fetchone())["id"]
+        # الرابط يُسجَّل في بنك شواهد القسم مرة واحدة (يُعاد القائم بدل إنشاء سجل مكرر)
+        ev_id = await link_evidence_id(conn, user, m["department_id"], str(body.url), body.title_ar,
+                                       f"شاهد داعم لمحضر AQAP-M-{minutes_id}")
     return await _attach(conn, user, m, ev_id, body.note)
 
 

@@ -82,3 +82,4 @@ def test_calendar_import_rejects_bombs(client):
         z.writestr("xl/worksheets/sheet1.xml", '<?xml version="1.0"?><!DOCTYPE x [<!ENTITY e SYSTEM "file:///etc/passwd">]><x>&e;</x>')
     r = client.post(url, headers=h, files={"file": ("c.xlsx", buf.getvalue(), "application/octet-stream")})
     assert r.status_code == 422
+

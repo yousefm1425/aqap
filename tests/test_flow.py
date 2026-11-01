@@ -450,3 +450,25 @@ def test_enrollment_st06(client, auth):
     mine = client.get(f"{API}/cycles/1/enrollment", headers=auth(COORD)).json()      # منسق القسم يرى قسمه فقط
     assert all(d["department_id"] == cs["department_id"] for d in mine["by_department"]) and mine["unmatched"] == []
     assert client.delete(f"{API}/cycles/1/enrollment", headers=auth(DEAN)).json()["deleted"]
+
+
+def test_same_link_is_stored_once(client, auth):
+    """الرابط نفسه في القسم نفسه يُسجَّل في بنك الشواهد مرة واحدة، وربطه بالمتطلب مرتين لا يكرره."""
+    h = auth("coord.cs@ynb")
+    url = "https://example.sharepoint.com/sites/q/Shared%20Documents/2-2"
+    a = client.post(f"{API}/evidence", headers=h, json={"title_ar": "مجلد 2-2", "kind": "link", "url": url, "department_id": 1})
+    b = client.post(f"{API}/evidence", headers=h, json={"title_ar": "مجلد 2-2 مرة ثانية", "kind": "link", "url": url, "department_id": 1})
+    assert a.status_code == 201 and b.status_code == 201, (a.text, b.text)
+    assert a.json()["id"] == b.json()["id"] and b.json().get("reused") is True
+    # قسم آخر: سجل مستقل (لا تداخل بين الأقسام)
+    c = client.post(f"{API}/evidence", headers=auth("coord.ee@ynb"),
+                    json={"title_ar": "مجلد 2-2", "kind": "link", "url": url, "department_id": 2})
+    assert c.status_code == 201 and c.json()["id"] != a.json()["id"]
+    cs = client.get(f"{API}/cycles/1/assessments", headers=h).json()
+    aid = next(x["id"] for x in cs if x["status"] in ("draft", "returned"))
+    for _ in range(2):
+        r = client.post(f"{API}/assessments/{aid}/evidence", headers=h, json={"evidence_id": a.json()["id"]})
+        assert r.status_code == 201, r.text
+    ev = client.get(f"{API}/assessments/{aid}", headers=h).json()
+    ids = [e["evidence_id"] if "evidence_id" in e else e["id"] for e in ev.get("evidence", [])]
+    assert ids.count(a.json()["id"]) == 1

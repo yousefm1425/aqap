@@ -37,11 +37,41 @@ def _can_upload(user: CurrentUser, department_id: int | None) -> bool:
     return user.has(*UPLOADERS, department_id=department_id) or user.has("quality_dean", "system_admin")
 
 
+async def existing_link(conn: AsyncConnection, institution_id: int, department_id: int | None, url: str,
+                        confidentiality: int = 1) -> int | None:
+    """شاهد رابط قائم بنفس الرابط في القسم نفسه (وبنفس درجة السرية)، ليُعاد استخدامه بدل إنشاء سجل مكرر."""
+    cur = await conn.execute(
+        """SELECT id FROM evidence WHERE institution_id = %s AND department_id IS NOT DISTINCT FROM %s AND kind = 'link'
+              AND url = %s AND confidentiality = %s AND NOT is_archived ORDER BY id LIMIT 1""",
+        (institution_id, department_id, url.strip(), confidentiality))
+    row = await cur.fetchone()
+    return row["id"] if row else None
+
+
+async def link_evidence_id(conn: AsyncConnection, user: CurrentUser, department_id: int | None, url: str,
+                           title_ar: str, description_ar: str | None) -> int:
+    """الرابط يُسجَّل في بنك الشواهد مرة واحدة: يُعاد الشاهد القائم إن وُجد، وإلا يُنشأ."""
+    url = url.strip()
+    ev_id = await existing_link(conn, user.institution_id, department_id, url)
+    if ev_id is not None:
+        return ev_id
+    cur = await conn.execute(
+        """INSERT INTO evidence (institution_id, department_id, title_ar, description_ar, kind, url, created_by)
+           VALUES (%s, %s, %s, %s, 'link', %s, %s) RETURNING id""",
+        (user.institution_id, department_id, title_ar, description_ar, url, user.id))
+    return (await cur.fetchone())["id"]
+
+
 @router.post("", status_code=201)
 async def create_evidence(body: EvidenceCreate, user: CurrentUser = Depends(current_user),
                           conn: AsyncConnection = Depends(get_conn, scope="function")):
     if not _can_upload(user, body.department_id):
         raise forbid("لا تملك صلاحية إضافة شواهد لهذا القسم")
+    if body.kind == "link" and body.url is not None:
+        ev_id = await existing_link(conn, user.institution_id, body.department_id, str(body.url), body.confidentiality)
+        if ev_id is not None:          # الرابط مسجّل مسبقاً في بنك شواهد القسم: لا سجل مكرر
+            cur = await conn.execute("SELECT * FROM evidence WHERE id = %s", (ev_id,))
+            return {**await cur.fetchone(), "reused": True}
     cur = await conn.execute(
         """INSERT INTO evidence (institution_id, department_id, title_ar, description_ar, kind, url,
                                  confidentiality, created_by)

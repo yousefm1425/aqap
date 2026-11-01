@@ -163,7 +163,8 @@ async def link_evidence(assessment_id: int, body: EvidenceLink, user: CurrentUse
     if ev["department_id"] not in (None, a["department_id"]):
         raise forbid("لا يمكن ربط شاهد قسم آخر")
     await conn.execute(
-        "INSERT INTO assessment_evidence (assessment_id, evidence_id, note, linked_by) VALUES (%s, %s, %s, %s)",
+        """INSERT INTO assessment_evidence (assessment_id, evidence_id, note, linked_by) VALUES (%s, %s, %s, %s)
+           ON CONFLICT (assessment_id, evidence_id) DO NOTHING""",   # الشاهد مربوط مسبقاً (مثلاً عبر نموذج معتمد)
         (assessment_id, body.evidence_id, body.note, user.id))
     return {"assessment_id": assessment_id, "evidence_id": body.evidence_id}
 

@@ -10,6 +10,7 @@ from psycopg import AsyncConnection
 from pydantic import BaseModel, Field
 
 from ..security import CurrentUser, current_user, forbid, get_conn, load_cycle, not_found
+from .evidence import link_evidence_id
 from .evidence_links import assert_link_ok
 
 router = APIRouter(tags=["أعمال الجودة"])
@@ -351,11 +352,8 @@ async def submit_task(task_id: int, body: SubmitIn, user: CurrentUser = Depends(
         if not url:
             raise forbid("أرفق رابط الشاهد من مجلد OneDrive/SharePoint")
         await assert_link_ok(conn, user.institution_id, url)
-        cur = await conn.execute(
-            """INSERT INTO evidence (institution_id, department_id, title_ar, description_ar, kind, url, created_by)
-               VALUES (%s, %s, %s, %s, 'link', %s, %s) RETURNING id""",
-            (user.institution_id, dept, f"أعمال الجودة (الأسبوع {t['week_no']}): {t['title_ar']}"[:300], body.note_ar, url, user.id))
-        evidence_id = (await cur.fetchone())["id"]
+        evidence_id = await link_evidence_id(conn, user, dept, url,
+                                             f"أعمال الجودة (الأسبوع {t['week_no']}): {t['title_ar']}"[:300], body.note_ar)
         status = "submitted"
     await conn.execute(
         """INSERT INTO quality_task_submission (task_id, department_id, status, evidence_id, note_ar, submitted_by)
