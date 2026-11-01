@@ -69,3 +69,11 @@ def auth(client):
         return cache[email]
 
     return headers
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limits():
+    """حدود المحاولات لكل عنوان IP تُصفَّر بين الاختبارات (كل الاختبارات من العنوان نفسه)."""
+    from app import ratelimit
+    ratelimit.reset()
+    yield

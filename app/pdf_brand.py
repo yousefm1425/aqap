@@ -167,7 +167,36 @@ def signatures(boxes: list[tuple[str, str]], eseal: str | None = None) -> str:
     return f"<table class='sign'><tr>{cells}</tr></table>{seal}"
 
 
+def _allowed_resource(url: str) -> bool:
+    """لا يجلب مولّد PDF إلا الصور المضمّنة (data:) وملفات قوالب المنصة نفسها (الخطوط والشعارات)؛
+    أي مصدر آخر يُرفض حتى لو تسلل إلى المحتوى (حماية من قراءة ملفات الخادم أو طلب عناوين داخلية)."""
+    from urllib.parse import unquote, urlparse
+
+    if url.startswith("data:"):
+        return True
+    u = urlparse(url)
+    return u.scheme == "file" and ROOT.resolve() in Path(unquote(u.path)).resolve().parents
+
+
+def _url_fetcher():
+    import weasyprint
+
+    if hasattr(weasyprint, "URLFetcher"):          # WeasyPrint 66 فأحدث
+        class SafeFetcher(weasyprint.URLFetcher):
+            def fetch(self, url, headers=None):
+                if not _allowed_resource(url):
+                    raise ValueError(f"مصدر غير مسموح في PDF: {url[:80]}")
+                return super().fetch(url, headers)
+        return SafeFetcher(allow_redirects=False)
+
+    def fetch(url, *args, **kwargs):                # الإصدارات الأقدم
+        if not _allowed_resource(url):
+            raise ValueError(f"مصدر غير مسموح في PDF: {url[:80]}")
+        return weasyprint.default_url_fetcher(url, *args, **kwargs)
+    return fetch
+
+
 def to_pdf(html: str) -> bytes:
     from weasyprint import HTML
 
-    return HTML(string=html, base_url=str(ROOT)).write_pdf()
+    return HTML(string=html, base_url=str(ROOT), url_fetcher=_url_fetcher()).write_pdf()

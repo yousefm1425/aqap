@@ -15,6 +15,7 @@ from .. import db
 from ..config import settings
 from ..mailer import link_email, mail_configured, send_mail
 from ..passwords import hash_password, new_link_token, password_problem, token_digest, verify_password
+from ..ratelimit import limit
 from ..security import CurrentUser, current_user, issue_token, password_version
 
 router = APIRouter(prefix="/auth", tags=["الدخول"])
@@ -82,7 +83,7 @@ async def auth_config():
     return {"dev_login": settings.env != "prod", "mail": mail_configured()}
 
 
-@router.post("/login")
+@router.post("/login", dependencies=[Depends(limit("login", 20, 300))])
 async def login(body: LoginIn):
     email = body.email.strip().lower()
     async with db.transaction() as conn:
@@ -114,7 +115,7 @@ async def login(body: LoginIn):
     return {"access_token": issue_token(row["email"], pv=password_version(row["changed_at"])), "token_type": "bearer"}
 
 
-@router.post("/forgot")
+@router.post("/forgot", dependencies=[Depends(limit("forgot", 5, 300))])
 async def forgot(body: ForgotIn):
     email = body.email.strip().lower()
     async with db.transaction() as conn:
@@ -146,7 +147,7 @@ async def _token_row(conn: AsyncConnection, raw: str) -> dict:
     return row
 
 
-@router.get("/link")
+@router.get("/link", dependencies=[Depends(limit("link", 30, 300))])
 async def check_link(token: str):
     """تتحقق شاشة تعيين كلمة المرور من الرابط قبل عرض النموذج."""
     async with db.transaction() as conn:
@@ -166,7 +167,7 @@ async def _set_password(conn: AsyncConnection, user_id: int, password: str) -> d
     return (await cur.fetchone())["changed_at"]
 
 
-@router.post("/reset")
+@router.post("/reset", dependencies=[Depends(limit("reset", 15, 300))])
 async def reset(body: ResetIn):
     async with db.transaction() as conn:
         row = await _token_row(conn, body.token)
@@ -176,7 +177,7 @@ async def reset(body: ResetIn):
     return {"access_token": issue_token(row["email"], pv=password_version(changed_at)), "token_type": "bearer"}
 
 
-@router.post("/change-password")
+@router.post("/change-password", dependencies=[Depends(limit("change", 10, 300))])
 async def change_password(body: ChangeIn, user: CurrentUser = Depends(current_user)):
     async with db.transaction(user.id) as conn:
         cur = await conn.execute("SELECT password_hash FROM user_credential WHERE user_id = %s", (user.id,))

@@ -118,7 +118,7 @@ def test_minutes_lifecycle(client):
     a111 = next(a for a in cs if a["requirement_code"] == "1-1-1")
     assert a111["evidence_count"] == 1
     d = client.get(f"{API}/evidence/{arch['evidence_id']}/download", headers=hod).json()
-    assert Path(d["url"].removeprefix("file://")).read_bytes().startswith(b"%PDF")
+    assert client.get(d["url"]).content.startswith(b"%PDF")
 
     full = client.get(f"{API}/minutes/{mid}", headers=coord).json()
     recs = [r for a in full["agenda"] for r in a["recommendations"]]

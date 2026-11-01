@@ -26,12 +26,66 @@ async def lifespan(_: FastAPI):
     await db.close_pool()
 
 
+_PROD = settings.env == "prod"
+# في الإنتاج لا تُنشر صفحات توثيق الواجهة البرمجية (تكشف كل نقاط النهاية وتحمّل سكربتات من خارج المنصة)
 app = FastAPI(title="AQAP API", version="0.1.0",
-              description="واجهة برمجية لمنصة إدارة الجودة والاعتماد الأكاديمي", lifespan=lifespan)
+              description="واجهة برمجية لمنصة إدارة الجودة والاعتماد الأكاديمي", lifespan=lifespan,
+              docs_url=None if _PROD else "/docs", redoc_url=None if _PROD else "/redoc",
+              openapi_url=None if _PROD else "/openapi.json")
+
+# ترويسات أمان المتصفح لكل الردود
+_CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; "
+        "font-src 'self' data:; connect-src 'self'; frame-src 'self' blob:; object-src 'self' blob:; "
+        "base-uri 'self'; form-action 'self'; frame-ancestors 'none'")
+_SECURITY_HEADERS = {
+    "X-Frame-Options": "DENY",                       # لا تُضمَّن المنصة داخل مواقع أخرى
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+    "Cross-Origin-Opener-Policy": "same-origin",
+}
+
+
+@app.middleware("http")
+async def security_headers(request, call_next):
+    resp = await call_next(request)
+    for k, v in _SECURITY_HEADERS.items():
+        resp.headers.setdefault(k, v)
+    if request.url.path not in ("/docs", "/redoc"):   # صفحتا التوثيق (خارج الإنتاج فقط) تحمّلان سكربتات خارجية
+        resp.headers.setdefault("Content-Security-Policy", _CSP)
+    if _PROD:   # فرض HTTPS في المتصفح لمدة سنة (للنطاق ونطاقاته الفرعية)
+        resp.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+    if request.url.path.startswith("/api/"):
+        resp.headers.setdefault("Cache-Control", "no-store")   # بيانات المستخدمين لا تُحفظ في ذاكرة المتصفح أو الوسطاء
+    return resp
+
 register_error_handlers(app)
 for r in (auth.router, cycles.router, assessments.router, evidence.router, actions.router, reports.router, exports.router, minutes.router, forms.router,
           applicability.router, calendar.router, evidence_links.router, admin.router, quality_works.router, college.router, patterns.router, attendance.router, enrollment.router):
     app.include_router(r, prefix="/api/v1")
+
+
+@app.get("/api/v1/files/{token}", include_in_schema=False)
+async def download_file(token: str):
+    """تنزيل ملف من التخزين المحلي برابط موقّع قصير الأجل يُصدره الخادم بعد التحقق من الصلاحية."""
+    import jwt
+    from fastapi.responses import FileResponse
+    from .storage import FILE_AUDIENCE, LocalStorage, storage as _st
+
+    st = _st()
+    if not isinstance(st, LocalStorage):
+        raise HTTPException(404)
+    try:
+        claims = jwt.decode(token, settings.jwt_secret, algorithms=["HS256"], audience=FILE_AUDIENCE,
+                            options={"require": ["exp", "k"]})
+        path = st.path_for(claims["k"])
+    except (jwt.PyJWTError, ValueError):
+        raise HTTPException(403, "رابط التنزيل غير صالح أو انتهت صلاحيته؛ أعد المحاولة من المنصة")
+    if not path.is_file():
+        raise HTTPException(404, "الملف غير موجود")
+    # مرفق دائماً (لا يُعرض داخل المنصة) حتى لا يُنفَّذ محتوى ملف مرفوع في سياق المنصة
+    return FileResponse(path, filename=claims.get("n") or path.name, content_disposition_type="attachment",
+                        media_type="application/octet-stream")
 
 
 @app.get("/health", tags=["النظام"])

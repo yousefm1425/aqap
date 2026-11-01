@@ -54,7 +54,10 @@ def test_evidence_upload_and_link(client, auth):
     r = client.post(f"{API}/assessments/{STATE['a1']}/evidence", headers=auth(COORD), json={"evidence_id": ev})
     assert r.status_code == 201, r.text
     d = client.get(f"{API}/evidence/{ev}/download", headers=auth(HOD)).json()
-    assert d["url"].startswith("file://")
+    assert d["url"].startswith("/api/v1/files/")
+    f = client.get(d["url"])                          # رابط موقّع: لا يحتاج ترويسة الدخول
+    assert f.status_code == 200 and f.content == b"%PDF-1.4 v2"
+    assert f.headers["content-disposition"].startswith("attachment")
 
 
 def test_full_workflow(client, auth):
