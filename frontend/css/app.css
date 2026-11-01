@@ -678,3 +678,34 @@ a.sreq-text:hover { color: var(--primary); text-decoration: underline; }
 .pw-card { max-width: 28rem; }
 .users-table .row-actions { display: flex; gap: .4rem; flex-wrap: wrap; }
 @media (max-width: 480px) { .login { margin: 1.5rem 1rem; padding: 1.25rem; } }
+
+/* ---------------------------------------------------------------- شاشة الدخول السينمائية */
+.auth-scene { position: fixed; inset: 0; z-index: 0; background: #070b0c; overflow: hidden; }
+.auth-scene canvas { display: block; }
+.auth-scene-caption { position: absolute; inset-inline-start: 2rem; bottom: 1.6rem; color: rgba(255,255,255,.78);
+  font-size: .95rem; letter-spacing: .02em; padding-inline-start: .8rem; border-inline-start: 3px solid #009C8C;
+  transition: opacity .4s ease; text-shadow: 0 1px 8px rgba(0,0,0,.6); }
+body.has-auth-scene { background: #070b0c; }
+body.has-auth-scene #app { position: relative; z-index: 1; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 1.5rem 1rem; }
+body.has-auth-scene .login { margin: 0; width: 100%; max-width: 26rem; color: #EAF4F2;
+  background: rgba(8, 20, 22, .58); border: 1px solid rgba(255,255,255,.12); border-radius: 18px;
+  -webkit-backdrop-filter: blur(16px) saturate(140%); backdrop-filter: blur(16px) saturate(140%);
+  box-shadow: 0 30px 80px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.06); }
+body.has-auth-scene .login h1 { color: #fff; }
+body.has-auth-scene .login .muted, body.has-auth-scene .login .faint, body.has-auth-scene .login label { color: rgba(234,244,242,.72); }
+body.has-auth-scene .login-brand { border-bottom-color: rgba(255,255,255,.12); }
+body.has-auth-scene .login-brand span { color: #7FE3D5; }
+body.has-auth-scene .login input[type=email], body.has-auth-scene .login input[type=password], body.has-auth-scene .login input[type=text] {
+  background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.18); color: #fff; }
+body.has-auth-scene .login input:focus { border-color: #2BC4B0; box-shadow: 0 0 0 3px rgba(43,196,176,.22); outline: none; }
+body.has-auth-scene .login .pw-toggle, body.has-auth-scene .login .auth-link, body.has-auth-scene .login a { color: #7FE3D5; }
+body.has-auth-scene .login .btn.primary { background: linear-gradient(135deg, #009C8C, #0E5A47); border-color: transparent;
+  box-shadow: 0 8px 24px rgba(0,156,140,.35); font-weight: 700; }
+body.has-auth-scene .login .btn.primary:hover { filter: brightness(1.08); }
+body.has-auth-scene .login .btn:not(.primary) { background: rgba(255,255,255,.08); color: #EAF4F2; border-color: rgba(255,255,255,.18); }
+body.has-auth-scene .login .error-box { background: rgba(194,70,61,.18); color: #FFB4AC; border: 1px solid rgba(194,70,61,.45); }
+body.has-auth-scene .login .ok-box { background: rgba(0,156,140,.16); color: #9FF0E2; border: 1px solid rgba(0,156,140,.4); }
+body.has-auth-scene .login .notice { background: rgba(183,121,31,.18); color: #FFD9A0; }
+body.has-auth-scene .dev-login { border-top-color: rgba(255,255,255,.14); }
+body.has-auth-scene .dev-login summary { color: rgba(234,244,242,.6); }
+@media (max-width: 480px) { .auth-scene-caption { inset-inline-start: 1rem; bottom: 1rem; font-size: .85rem; } }

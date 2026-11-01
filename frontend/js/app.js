@@ -15,6 +15,7 @@ import { renderTraining } from './training.js';
 import { renderFolders } from './folders.js';
 import { renderGuides } from './guides.js';
 import { renderUsers } from './users.js';
+import { startLoginScene, stopLoginScene } from './login-scene.js';
 
 const root = document.getElementById('app');
 export const state = { me: null, cycles: [], cycle: null, departments: [] };
@@ -59,8 +60,9 @@ let authCfg = null;
 const authConfig = async () => authCfg ??= await api('/auth/config').catch(() => ({ dev_login: false, mail: false }));
 
 function authCard(...children) {
+  startLoginScene();                       // خلفية الورش التقنية السينمائية (تتوقف عند دخول المنصة)
   return h('div', { class: 'login' },
-    h('div', { class: 'login-brand' }, h('img', { src: 'img/tvtc-logo.png', alt: 'المؤسسة العامة للتدريب التقني والمهني' }),
+    h('div', { class: 'login-brand' }, h('img', { src: 'img/tvtc-logo-light.png', alt: 'المؤسسة العامة للتدريب التقني والمهني' }),
       h('span', null, 'الكلية التقنية التطبيقية بينبع')),
     h('h1', null, 'منصة الجودة والاعتماد'),
     ...children);
@@ -249,6 +251,7 @@ function shell(content) {
 }
 
 export async function route() {
+  stopLoginScene();
   let { path } = parseRoute();
   if (!['workspace', 'dashboard', 'plans', 'minutes', 'forms', 'report', 'scope', 'calendar', 'quality', 'college', 'training', 'folders', 'guides', 'users', 'password'].includes(path)) {
     path = 'scope';                     // صفحة الانطلاق: نطاق المتطلبات ومنها إلى مهمة كل متطلب
