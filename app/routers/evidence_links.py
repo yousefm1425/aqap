@@ -7,6 +7,7 @@
 - فحص الروابط: يكشف الروابط المحذوفة أو المعطلة قبل زيارة المقيّم الخارجي.
 """
 import asyncio
+import ipaddress
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 
@@ -159,11 +160,29 @@ async def delete_folder(folder_id: int, user: CurrentUser = Depends(current_user
 
 
 # ---------------------------------------------------------------- فحص الروابط
+async def _public_host(url: str) -> bool:
+    """يمنع فاحص الروابط من الوصول إلى عناوين داخلية (الخادم نفسه، قاعدة البيانات، الشبكة الخاصة) — حماية من SSRF."""
+    u = urlparse(url)
+    if u.scheme not in ("http", "https") or not u.hostname:
+        return False
+    try:
+        infos = await asyncio.get_running_loop().getaddrinfo(u.hostname, u.port or (443 if u.scheme == "https" else 80))
+    except OSError:
+        return False
+    for info in infos:
+        ip = ipaddress.ip_address(info[4][0].split("%")[0])
+        if not ip.is_global or ip.is_multicast:
+            return False
+    return True
+
+
 async def classify(client: httpx.AsyncClient, url: str) -> tuple[str, int | None]:
     """ok: يفتح · restricted: يتطلب دخول المؤسسة (سليم) · broken: محذوف/غير موجود · unreachable: تعذّر الوصول."""
     try:
         current = url
         for _ in range(6):
+            if not await _public_host(current):
+                return "unreachable", None
             r = await client.get(current, follow_redirects=False)
             if r.is_redirect:
                 nxt = str(r.next_request.url) if r.next_request else r.headers.get("location", "")

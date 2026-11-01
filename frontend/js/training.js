@@ -257,17 +257,19 @@ function printReport(d, tAtt, tRec, e) {
   if (c.attendance < tAtt) recs.push('تفعيل دور المرشد التدريبي مع المتدربين المتكرر غيابهم والتواصل مع أولياء الأمور.');
   if (d.low_courses.length) recs.push(`دراسة أسباب انخفاض الحضور في: ${d.low_courses.slice(0, 3).map(x => x.course.trim()).join('، ')}.`);
   recs.push('إدراج نتائج هذا التقرير في تقرير قياس سير العملية التدريبية (4-3-1) لكل قسم.');
-  const kpi = (l, v, cls = '') => `<div class="k ${cls}"><small>${l}</small><b>${v}</b></div>`;
-  const deptRows = d.by_department.map(x => `<tr><td>${x.name}</td><td>${num(x.sections)}</td><td>${num(x.trainers)}</td><td>${num(x.registered)}</td>
+  // كل قيمة مصدرها ملفات رايات المرفوعة تُهرَّب قبل إدراجها في HTML التقرير
+  const E = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const kpi = (l, v, cls = '') => `<div class="k ${cls}"><small>${E(l)}</small><b>${E(v)}</b></div>`;
+  const deptRows = d.by_department.map(x => `<tr><td>${E(x.name)}</td><td>${num(x.sections)}</td><td>${num(x.trainers)}</td><td>${num(x.registered)}</td>
     <td class="${x.attendance < tAtt ? 'bad' : ''}">${P(x.attendance)}</td><td class="${x.recording < tRec ? 'bad' : ''}">${P(x.recording)}</td>
     <td>${num(x.incomplete)}</td><td>${num(x.deprived)}</td><td>${num(x.withdrawn)}</td></tr>`).join('');
-  const fu = d.follow_up.slice(0, 30).map((x, i) => `<tr><td>${i + 1}</td><td>${x.department}</td><td>${x.trainer ?? ''}</td><td>${(x.course ?? '').trim()}</td>
-    <td>${x.section ?? ''}</td><td class="bad">${P(x.recording / 100)}</td></tr>`).join('');
-  const enr = e?.latest && e.by_department?.length ? `<div style="break-inside:avoid"><h2>المتدربون المستمرون والبرامج (ST06${e.latest.term_label ? ` — ${e.latest.term_label}` : ''})</h2>
+  const fu = d.follow_up.slice(0, 30).map((x, i) => `<tr><td>${i + 1}</td><td>${E(x.department)}</td><td>${E(x.trainer)}</td><td>${E((x.course ?? '').trim())}</td>
+    <td>${E(x.section)}</td><td class="bad">${P(x.recording / 100)}</td></tr>`).join('');
+  const enr = e?.latest && e.by_department?.length ? `<div style="break-inside:avoid"><h2>المتدربون المستمرون والبرامج (ST06${e.latest.term_label ? ` — ${E(e.latest.term_label)}` : ''})</h2>
     <p class="sub" style="margin:0 0 4px">إجمالي المتدربين المستمرين ${num(e.total)} في ${num(e.programs)} برنامج${e.same_snapshot ? '' : ` · بداية الفصل ${num(e.baseline_total)} (الاستمرار ${P(e.baseline_total ? e.total / e.baseline_total : null)})`}</p>
     <table><tr><th>القسم</th><th>البرامج</th><th>المتدربون</th>${e.same_snapshot ? '' : '<th>بداية الفصل</th>'}<th>المدربون</th><th>متدرب لكل مدرب</th></tr>
-    ${e.by_department.map(x => `<tr><td>${x.name}</td><td>${x.programs.map(p => p.program.replace(/\s*-\s*تطبيقي$/, '').replace(/-تطبيقي$/, '') + (p.shift && p.shift !== 'صباحي' ? ` (${p.shift})` : '')).join('، ')}</td>
-      <td>${num(x.trainees)}</td>${e.same_snapshot ? '' : `<td>${num(x.baseline)}</td>`}<td>${x.trainers ? num(x.trainers) : '—'}</td><td>${x.per_trainer ?? '—'}</td></tr>`).join('')}</table></div>` : '';
+    ${e.by_department.map(x => `<tr><td>${E(x.name)}</td><td>${E(x.programs.map(p => p.program.replace(/\s*-\s*تطبيقي$/, '').replace(/-تطبيقي$/, '') + (p.shift && p.shift !== 'صباحي' ? ` (${p.shift})` : '')).join('، '))}</td>
+      <td>${num(x.trainees)}</td>${e.same_snapshot ? '' : `<td>${num(x.baseline)}</td>`}<td>${x.trainers ? num(x.trainers) : '—'}</td><td>${E(x.per_trainer ?? '—')}</td></tr>`).join('')}</table></div>` : '';
   const chart1 = groupedBars(d.by_department, tAtt).outerHTML, chart2 = d.trend.length > 1 ? trendLine(d.trend).outerHTML : '';
   const html = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>التقرير التنفيذي — سير العملية التدريبية</title>
   <style>
@@ -296,23 +298,24 @@ function printReport(d, tAtt, tRec, e) {
   <div class="hd"><div><img src="${location.origin}/app/img/tvtc-logo.png" alt=""><div class="college">الكلية التقنية التطبيقية بينبع</div></div>
     <div class="t">وكالة الجودة<br><span style="font-weight:400;color:#66706f;font-size:9pt">تقريرا SO09 و ST06 — رايات</span></div></div>
   <h1>التقرير التنفيذي لسير العملية التدريبية</h1>
-  <p class="sub">الأسبوع التدريبي ${wk.week_no}${wk.period_from ? ` · من ${date(wk.period_from)} إلى ${date(wk.period_to)}` : ''}</p>
+  <p class="sub">الأسبوع التدريبي ${E(wk.week_no)}${wk.period_from ? ` · من ${date(wk.period_from)} إلى ${date(wk.period_to)}` : ''}</p>
   <div class="kpis">${kpi('نسبة الحضور الفعلية', P(c.attendance))}${kpi('نسبة رصد التحضير', P(c.recording), 'r')}${kpi('الشعب', num(c.sections))}
     ${kpi('المتدربون المسجلون', num(c.registered))}${kpi('شعب رصدها ناقص', num(c.incomplete), 'b')}</div>
-  <h2>أبرز النتائج</h2><ul>${insights(d, tAtt, tRec).map(x => `<li>${x}</li>`).join('')}</ul>
+  <h2>أبرز النتائج</h2><ul>${insights(d, tAtt, tRec).map(x => `<li>${E(x)}</li>`).join('')}</ul>
   <h2>الحضور ورصد التحضير حسب القسم</h2>
   <div class="legend"><i style="background:${ATT}"></i>الحضور<i style="background:${REC}"></i>رصد التحضير<i style="background:#C2463D;height:2px"></i>المستهدف ${P(tAtt)}</div>${chart1}
   ${chart2 ? `<h2>اتجاه الأسابيع</h2>${chart2}` : ''}
   <h2>ملخص الأقسام</h2><table><tr><th>القسم</th><th>الشعب</th><th>المدربون</th><th>المسجلون</th><th>الحضور</th><th>رصد التحضير</th><th>رصد ناقص</th><th>المحرومون</th><th>المنسحبون</th></tr>${deptRows}</table>
   ${enr}
-  <h2>التوصيات</h2><ul>${recs.map(x => `<li>${x}</li>`).join('')}</ul>
+  <h2>التوصيات</h2><ul>${recs.map(x => `<li>${E(x)}</li>`).join('')}</ul>
   ${fu ? `<h2>شعب تحتاج متابعة رصد التحضير (أدنى 30)</h2><table><tr><th>#</th><th>القسم</th><th>المدرب</th><th>المقرر</th><th>الشعبة</th><th>الرصد</th></tr>${fu}</table>` : ''}
   <div class="sign"><div>رئيس القسم</div><div>وكيل الجودة</div></div>
   <div class="ft"><span>المؤسسة العامة للتدريب التقني والمهني · الكلية التقنية التطبيقية بينبع</span><span>منصة الجودة والاعتماد</span></div>
-  <script>setTimeout(() => print(), 600)<\/script></body></html>`;
+  </body></html>`;
   const w = window.open('', '_blank');
   if (!w) { toast('اسمح بالنوافذ المنبثقة لعرض التقرير', 'error'); return; }
   w.document.write(html); w.document.close();
+  setTimeout(() => { try { w.focus(); w.print(); } catch { /* أُغلقت النافذة */ } }, 600);
 }
 
 // ------------------------------------------------------------------ ST06: المتدربون المستمرون والبرامج

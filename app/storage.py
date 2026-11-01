@@ -43,7 +43,8 @@ class MinioStorage:
 
 
 class LocalStorage:
-    """للتطوير والاختبارات فقط."""
+    """تخزين على قرص الخادم (وحدة تخزين دائمة في الحاوية). التنزيل عبر رابط موقّع قصير الأجل
+    (/api/v1/files/<رمز>) يُصدره الخادم بعد التحقق من صلاحية المستخدم، فلا يُكشف المسار ولا يُنزَّل ملف بلا إذن."""
 
     def __init__(self) -> None:
         self.root = Path(settings.local_storage_dir)
@@ -58,9 +59,25 @@ class LocalStorage:
     def remove(self, key):
         (self.root / key).unlink(missing_ok=True)
 
-    def download_url(self, key, filename):
-        return f"file://{(self.root / key).resolve()}"
+    def path_for(self, key: str) -> Path:
+        """المسار الفعلي للمفتاح، مع منع الخروج من مجلد التخزين."""
+        root = self.root.resolve()
+        path = (root / key).resolve()
+        if root not in path.parents:
+            raise ValueError("مفتاح تخزين غير صالح")
+        return path
 
+    def download_url(self, key, filename):
+        import jwt
+        from datetime import datetime, timedelta, timezone
+        now = datetime.now(timezone.utc)
+        token = jwt.encode({"k": key, "n": filename, "aud": FILE_AUDIENCE, "iat": now,
+                            "exp": now + timedelta(seconds=settings.download_url_ttl_seconds)},
+                           settings.jwt_secret, algorithm="HS256")
+        return f"/api/v1/files/{token}"
+
+
+FILE_AUDIENCE = "aqap-file"
 
 _storage: Storage | None = None
 
