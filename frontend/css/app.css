@@ -708,7 +708,8 @@ body.has-sidebar .app-main { margin-inline-start: var(--side-w); min-height: 100
 body.has-sidebar.side-mini .app-main { margin-inline-start: var(--side-mini); }
 
 .sidebar { position: fixed; inset-block: 0; inset-inline-start: 0; width: var(--side-w); z-index: 40; display: flex; flex-direction: column;
-  color: #CBD5E1; background: linear-gradient(180deg, #0F172A 0%, #0B1220 100%);
+  color: #D5EDE6; background: linear-gradient(180deg, rgba(14,94,74,.93) 0%, rgba(10,72,57,.95) 55%, rgba(8,58,46,.97) 100%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%); backdrop-filter: blur(18px) saturate(140%);
   box-shadow: -1px 0 0 rgba(255,255,255,.06) inset, 0 0 40px -12px rgba(6,40,32,.55); transition: width .25s ease, transform .3s ease; }
 .sidebar::after { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .5;
   background: radial-gradient(120% 50% at 100% 0%, rgba(43,196,176,.18), transparent 60%), radial-gradient(90% 40% at 0% 100%, rgba(217,160,43,.10), transparent 60%); }
@@ -804,20 +805,24 @@ h1 { font-weight: 700; } h2, h3 { font-weight: 600; }
 body { -webkit-font-smoothing: antialiased; }
 ::selection { background: rgba(20,184,166,.25); }
 
-/* الشريط الجانبي الكحلي */
-.sidebar::after { opacity: .9; background: radial-gradient(110% 40% at 100% 0%, rgba(20,184,166,.16), transparent 60%),
-  radial-gradient(90% 35% at 0% 100%, rgba(37,99,235,.14), transparent 60%); }
-.side-brand small { color: #5EEAD4; }
-.side-group-title { color: rgba(148,163,184,.75); }
-.side-link { color: #94A3B8; }
-.side-link:hover { background: rgba(255,255,255,.06); color: #E2E8F0; }
-.side-link[aria-current="page"] { background: linear-gradient(270deg, rgba(20,184,166,.20), rgba(20,184,166,.04)); color: #fff;
-  box-shadow: none; }
-.side-link[aria-current="page"] .ico { color: #2DD4BF; opacity: 1; }
-.side-link[aria-current="page"]::before { background: #2DD4BF; }
-.side-user .avatar { background: linear-gradient(135deg, #14B8A6, #0D9488); }
-.side-link.sm { background: rgba(255,255,255,.04); }
-.side-head, .side-foot { border-color: rgba(255,255,255,.06); }
+/* الشريط الجانبي: أخضر هوية المؤسسة بلمسة زجاجية شفافة */
+.sidebar { border-inline-end: 1px solid rgba(255,255,255,.10); box-shadow: 0 0 0 1px rgba(255,255,255,.04) inset, 0 0 40px -14px rgba(6,60,46,.55); }
+.sidebar::after { opacity: 1; background:
+  radial-gradient(120% 45% at 100% 0%, rgba(94,234,212,.20), transparent 60%),
+  radial-gradient(90% 35% at 0% 100%, rgba(224,176,74,.12), transparent 60%),
+  linear-gradient(180deg, rgba(255,255,255,.06), transparent 30%); }
+.side-brand small { color: #A7F3D0; }
+.side-group-title { color: rgba(213,237,230,.55); }
+.side-link { color: rgba(226,244,238,.82); }
+.side-link:hover { background: rgba(255,255,255,.09); color: #fff; }
+.side-link[aria-current="page"] { background: rgba(255,255,255,.16); color: #fff; box-shadow: inset 0 0 0 1px rgba(255,255,255,.12),
+  0 8px 20px -12px rgba(0,0,0,.45); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+.side-link[aria-current="page"] .ico { color: #6EE7B7; opacity: 1; }
+.side-link[aria-current="page"]::before { background: #E0B04A; }
+.side-user .avatar { background: linear-gradient(135deg, #E0B04A, #C98F22); }
+.side-link.sm { background: rgba(255,255,255,.07); }
+.side-collapse { background: rgba(255,255,255,.09); }
+.side-head, .side-foot { border-color: rgba(255,255,255,.10); }
 
 /* الشريط العلوي للمحتوى: زجاجي فاتح */
 .appbar { position: sticky; top: 0; z-index: 30; background: rgba(255,255,255,.85); backdrop-filter: blur(14px);
