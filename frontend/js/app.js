@@ -10,6 +10,7 @@ import { renderReport } from './report.js';
 import { renderScope } from './scope.js';
 import { renderCalendar } from './calendar.js';
 import { renderQuality } from './quality.js';
+import { renderTimeline } from './timeline.js';
 import { renderCollege } from './college.js';
 import { renderTraining } from './training.js';
 import { renderFolders } from './folders.js';
@@ -229,6 +230,7 @@ const ICONS = {
   plans: 'M3 17l6-6 4 4 8-8M15 7h6v6',
   quality: 'M12 3l2.6 5.3 5.9.9-4.2 4.1 1 5.8L12 16.4l-5.3 2.7 1-5.8L3.5 9.2l5.9-.9z',
   calendar: 'M4 6h16v15H4zM4 10h16M8 3v4M16 3v4',
+  timeline: 'M3 12h18M7 8v8M12 6v12M17 9v6',
   dashboard: 'M4 4h7v7H4zM13 4h7v4h-7zM13 10h7v10h-7zM4 13h7v7H4z',
   training: 'M3 12h4l3-8 4 16 3-8h4',
   report: 'M5 4.5A1.5 1.5 0 016.5 3H19v15H6.5A1.5 1.5 0 005 19.5zM5 19.5A1.5 1.5 0 006.5 21H19',
@@ -253,7 +255,7 @@ function icon(name) {
 
 const NAV = () => [
   ['العمل اليومي', [['scope', 'نطاق المتطلبات'], ['workspace', 'التقديرات والشواهد'], ['minutes', 'المحاضر'], ['forms', 'الخطط والتقارير'],
-    ['plans', 'خطط التحسين'], ['quality', 'أعمال الجودة'], ['calendar', 'التقويم']]],
+    ['plans', 'خطط التحسين'], ['quality', 'أعمال الجودة'], ['timeline', 'الخط الزمني للمستوى الثاني'], ['calendar', 'التقويم']]],
   ['المتابعة والتقارير', [canDash() && ['dashboard', 'لوحة المؤشرات'], ['training', 'سير العملية التدريبية'], ['report', 'التقرير النهائي'],
     canDash() && ['college', 'تقارير الكلية'], ['folders', 'مجلدات الشواهد']]],
   ['المراجع والإدارة', [['guides', 'الأدلة'], canAdmin() && ['users', 'المستخدمون']]],
@@ -323,7 +325,7 @@ function shell(content) {
 
 export async function route() {
   let { path } = parseRoute();
-  if (!['workspace', 'dashboard', 'plans', 'minutes', 'forms', 'report', 'scope', 'calendar', 'quality', 'college', 'training', 'folders', 'guides', 'users', 'password'].includes(path)) {
+  if (!['workspace', 'dashboard', 'plans', 'minutes', 'forms', 'report', 'scope', 'calendar', 'quality', 'timeline', 'college', 'training', 'folders', 'guides', 'users', 'password'].includes(path)) {
     path = 'scope';                     // صفحة الانطلاق: نطاق المتطلبات ومنها إلى مهمة كل متطلب
     history.replaceState(null, '', `#/${path}`);
   }
@@ -340,7 +342,7 @@ export async function route() {
   }
   try {
     const view = path === 'password' ? renderChangePassword() : path === 'dashboard' ? await renderDashboard() : path === 'plans' ? await renderPlans()
-      : path === 'minutes' ? await renderMinutes() : path === 'forms' ? await renderForms() : path === 'report' ? await renderReport() : path === 'scope' ? await renderScope() : path === 'calendar' ? await renderCalendar() : path === 'quality' ? await renderQuality() : path === 'college' ? await renderCollege() : path === 'training' ? await renderTraining() : path === 'folders' ? await renderFolders() : path === 'guides' ? await renderGuides() : path === 'users' ? await renderUsers() : await renderWorkspace();
+      : path === 'minutes' ? await renderMinutes() : path === 'forms' ? await renderForms() : path === 'report' ? await renderReport() : path === 'scope' ? await renderScope() : path === 'calendar' ? await renderCalendar() : path === 'quality' ? await renderQuality() : path === 'timeline' ? await renderTimeline() : path === 'college' ? await renderCollege() : path === 'training' ? await renderTraining() : path === 'folders' ? await renderFolders() : path === 'guides' ? await renderGuides() : path === 'users' ? await renderUsers() : await renderWorkspace();
     mount(content, view);
     content.className = '';
   } catch (ex) {
