@@ -45,7 +45,8 @@ function seedDialog(cycle, loaded, reload) {
   const s2 = h('input', { class: 'input', type: 'date' });
   openDialog(loaded ? 'إعادة تحميل الخط الزمني' : 'تحميل الخط الزمني للمستوى الثاني', [
     h('p', { class: 'muted' }, 'تُحمَّل الخطة المعتمدة 1447هـ (48 متطلباً بأسابيع تنفيذها في الفصلين) مع أسابيع التقويم التدريبي 1448هـ '
-      + 'الصادر من المؤسسة: بداية الفصل الأول 23 أغسطس 2026 والثاني 17 يناير 2027، ولا تُحسب أسابيع إجازة الخريف وعيدي الفطر والأضحى.'),
+      + 'الصادر من المؤسسة: بداية الفصل الأول 23 أغسطس 2026 والثاني 17 يناير 2027، ولا تُحسب أسابيع إجازة الخريف وعيدي الفطر والأضحى. '
+      + 'وتُضبط مواعيد «أعمال الجودة» المحمّلة على الأسابيع نفسها.'),
     loaded && h('p', { class: 'qw-return' }, 'إعادة التحميل تحذف المواعيد الحالية وما أشّرته الأقسام عليها. الشواهد تبقى مربوطة بتقديرات المتطلبات.'),
     h('details', null, h('summary', null, 'تاريخ بداية مختلف (اختياري)'),
       h('p', { class: 'faint' }, 'عند إدخال تاريخ تُحسب الأسابيع متتالية من أحد ذلك الأسبوع دون استثناء الإجازات.'),
@@ -53,7 +54,8 @@ function seedDialog(cycle, loaded, reload) {
   async () => {
     const r = await api(`/cycles/${cycle.id}/l2-timeline/seed`, { method: 'POST',
       body: { semester1_start: s1.value || null, semester2_start: s2.value || null, replace: !!loaded } });
-    toast(`حُمّل ${num(r.requirements)} متطلباً و${num(r.occurrences)} موعداً${r.missing.length ? ` (لم يُعثر على ${num(r.missing.length)} رمز في إطار الدورة)` : ''}`);
+    toast(`حُمّل ${num(r.requirements)} متطلباً و${num(r.occurrences)} موعداً${r.missing.length ? ` (لم يُعثر على ${num(r.missing.length)} رمز في إطار الدورة)` : ''}`
+      + (r.quality_tasks_realigned ? `، وصُحّح موعد ${num(r.quality_tasks_realigned)} من أعمال الجودة على أسابيع التقويم` : ''));
     reload();
   }, loaded ? 'إعادة التحميل' : 'تحميل');
 }

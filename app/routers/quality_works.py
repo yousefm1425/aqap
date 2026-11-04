@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 
 from ..security import CurrentUser, current_user, forbid, get_conn, load_cycle, not_found
 from .evidence_links import assert_link_ok
+from .l2_timeline import week_starts_for
 
 router = APIRouter(tags=["أعمال الجودة"])
 MANAGERS = ("quality_dean", "system_admin")
@@ -236,14 +237,14 @@ async def seed_tasks(cycle_id: int, body: SeedIn, user: CurrentUser = Depends(cu
     cur = await conn.execute("SELECT count(*) AS n FROM quality_task WHERE cycle_id = %s", (cycle_id,))
     if (await cur.fetchone())["n"]:
         raise forbid("جدول أعمال الجودة محمّل مسبقاً لهذه الدورة")
-    start = body.semester_start - timedelta(days=(body.semester_start.weekday() + 1) % 7)   # أحد ذلك الأسبوع
+    weeks = await week_starts_for(conn, cycle_id, body.semester_start)   # أسابيع التدريب دون أسابيع الإجازات
     await _actor(conn, user)
     for i, (week, title, off, cond, notes, subs, form) in enumerate(DEFAULT_TASKS):
         cur = await conn.execute(
             """INSERT INTO quality_task (cycle_id, week_no, title_ar, due_on, due_hint_ar, condition_ar, notes_ar, sort_order,
                                           form_code, created_by)
                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
-            (cycle_id, week, title, start + timedelta(days=(week - 1) * 7 + off), hint_for(week, off), cond, notes, i,
+            (cycle_id, week, title, weeks[week - 1] + timedelta(days=off), hint_for(week, off), cond, notes, i,
              form, user.id))
         if cond == PATTERNS_COND:
             await conn.execute("UPDATE quality_task SET depends_on = 'patterns' WHERE id = (SELECT max(id) FROM quality_task WHERE cycle_id = %s)",

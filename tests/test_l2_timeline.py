@@ -81,10 +81,21 @@ def test_plan_and_calendar_constants():
 def test_timeline_flow(client):
     coord, dean, ee, aud = (h(client, e) for e in ("coord@ynb", "dean@ynb", "coord.ee@ynb", "aud@ynb"))
 
+    # مهمة أعمال جودة محمّلة قبل التصحيح: الأسبوع 14 محسوب متتالياً (الخميس 26 نوفمبر) متجاهلاً إجازة الخريف
+    url = ADMIN_URL.rsplit("/", 1)[0] + f"/{DB}"
+    with psycopg.connect(url, autocommit=True) as c:
+        c.execute("""INSERT INTO aqap.quality_task (cycle_id, week_no, title_ar, due_on, sort_order)
+                     VALUES (1, 14, 'تقرير جاهزية القسم لبدء الاختبارات النهائية', '2026-11-26', 0),
+                            (1, 6, 'التقرير الشهري الأول لتفعيل منصة المهارات العملية', '2026-09-29', 1)""")
+
     assert client.post(f"{API}/cycles/1/l2-timeline/seed", headers=coord, json={}).status_code == 403
     r = client.post(f"{API}/cycles/1/l2-timeline/seed", headers=dean, json={})
     assert r.status_code == 201, r.text
     body = r.json()
+    assert body["quality_tasks_realigned"] == 1
+    with psycopg.connect(url) as c:
+        due = dict(c.execute("SELECT week_no, due_on FROM aqap.quality_task WHERE cycle_id = 1").fetchall())
+    assert due == {14: date(2026, 12, 3), 6: date(2026, 9, 29)}     # الأسبوع 14 بعد الإجازة، والأسبوع 6 لم يتغير
     assert body["requirements"] == 4 and len(body["missing"]) == 44
     assert body["occurrences"] == 1 + 5 + 16 + 2          # 1-1-1، 1-1-2، 4-3-1 أسبوعي، 6-3-1 (مستمر + الفصل الثاني)
     assert client.post(f"{API}/cycles/1/l2-timeline/seed", headers=dean, json={}).status_code == 403
@@ -144,3 +155,20 @@ def test_timeline_flow(client):
     data = client.get(f"{API}/cycles/1/l2-timeline", headers=dean).json()
     assert data["weeks"][0]["starts_on"] == "2026-08-23"
     assert all(not o["progress"] for r in data["requirements"] for o in r["occurrences"])
+
+
+def test_quality_tasks_follow_training_weeks(client):
+    dean = h(client, "dean@ynb")
+    # بلا تقويم محمّل للدورة: تُستخدم أسابيع التقويم المعتمد 1448هـ
+    with psycopg.connect(ADMIN_URL.rsplit("/", 1)[0] + f"/{DB}", autocommit=True) as c:
+        c.execute("DELETE FROM aqap.quality_task WHERE cycle_id = 1; DELETE FROM aqap.training_week WHERE cycle_id = 1")
+    r = client.post(f"{API}/cycles/1/quality-tasks/seed", headers=dean, json={"semester_start": "2026-08-23"})
+    assert r.status_code == 201, r.text
+    tasks = client.get(f"{API}/cycles/1/quality-tasks", headers=dean).json()
+    tasks = tasks.get("tasks", tasks) if isinstance(tasks, dict) else tasks
+    due = {}
+    for t in tasks:
+        due.setdefault(t["week_no"], set()).add(t["due_on"])
+    assert due[13] == {"2026-11-18"}                                   # قبل إجازة الخريف: الأربعاء كما هو
+    assert due[14] == {"2026-12-01", "2026-12-03"}                     # بعد الإجازة: الأسبوع 14 يبدأ 29 نوفمبر
+    assert due[19] == {"2027-01-07"}                                   # آخر أيام الاختبارات النهائية
