@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from . import db, storage
 from .config import settings
 from .errors import register_error_handlers
-from .routers import auth, actions, admin, applicability, assessments, calendar, evidence_links, cycles, evidence, exports, forms, minutes, quality_works, reports, college, patterns, attendance, enrollment
+from .routers import auth, actions, admin, applicability, assessments, calendar, evidence_links, cycles, evidence, exports, forms, minutes, quality_works, reports, college, patterns, attendance, enrollment, l2_timeline
 from .security import CurrentUser, current_user, get_conn, issue_dev_token
 
 
@@ -61,7 +61,7 @@ async def security_headers(request, call_next):
 
 register_error_handlers(app)
 for r in (auth.router, cycles.router, assessments.router, evidence.router, actions.router, reports.router, exports.router, minutes.router, forms.router,
-          applicability.router, calendar.router, evidence_links.router, admin.router, quality_works.router, college.router, patterns.router, attendance.router, enrollment.router):
+          applicability.router, calendar.router, evidence_links.router, admin.router, quality_works.router, college.router, patterns.router, attendance.router, enrollment.router, l2_timeline.router):
     app.include_router(r, prefix="/api/v1")
 
 
