@@ -44,6 +44,7 @@ export async function renderUsers() {
   const q = (params.q ?? '').trim();
   const users = data.users.filter(u => !q || `${u.full_name_ar} ${u.email}`.includes(q));
   const active = data.users.filter(u => u.is_active).length;
+  const inactive = data.users.filter(u => !u.is_active && u.id !== state.me.id);
 
   const email = h('input', { type: 'email', dir: 'ltr', placeholder: 'البريد الرسمي' });
   const name = h('input', { type: 'text', placeholder: 'الاسم الكامل' });
@@ -111,14 +112,73 @@ export async function renderUsers() {
     n.focus();
   };
 
+  // ---------------- لوحة تحكم مدير النظام: كلمة مرور مؤقتة، فك القفل، إنهاء الجلسات
+  const sys = data.is_sysadmin;
+  const fmtLogin = t => t ? new Date(t).toLocaleString('ar-SA-u-ca-gregory-nu-latn', { dateStyle: 'medium', timeStyle: 'short' }) : 'لم يدخل بعد';
+  const passwordDialog = u => {
+    const dlg = document.getElementById('dialog');
+    const auto = h('input', { type: 'radio', name: 'pwmode', id: 'pw-auto', checked: true });
+    const manual = h('input', { type: 'radio', name: 'pwmode', id: 'pw-manual' });
+    const pw = h('input', { type: 'text', dir: 'ltr', id: 'pw-val', autocomplete: 'off', placeholder: '8 خانات على الأقل، حروف وأرقام', disabled: true });
+    const sync = () => { pw.disabled = !manual.checked; if (manual.checked) pw.focus(); };
+    auto.addEventListener('change', sync); manual.addEventListener('change', sync);
+    const err = h('div');
+    const btn = h('button', { class: 'btn primary' }, 'تعيين كلمة المرور');
+    const form = h('form', { method: 'dialog', onsubmit: async ev => {
+      ev.preventDefault();
+      btn.disabled = true;
+      try {
+        const r = await api(`/users/${u.id}/password`, { method: 'POST', body: { password: manual.checked ? pw.value : null } });
+        showTemp(u, r.password ?? pw.value);
+      } catch (ex) { mount(err, h('div', { class: 'error-box' }, ex.message)); btn.disabled = false; }
+    } },
+      h('h2', null, `كلمة مرور مؤقتة — ${u.full_name_ar}`),
+      h('p', null, 'تُعيَّن الكلمة فوراً، وتنتهي جلسات المستخدم على كل أجهزته، ويُفك قفل حسابه إن كان مقفلاً. عند أول دخول تطلب منه المنصة تعيين كلمة مروره الخاصة.'),
+      h('div', { class: 'field' }, h('label', { class: 'check' }, auto, ' تولّدها المنصة (أقوى — يُنصح بها)')),
+      h('div', { class: 'field' }, h('label', { class: 'check' }, manual, ' أكتبها بنفسي'), pw),
+      h('p', { class: 'faint' }, 'لا تُرسل كلمة المرور في مجموعة أو قناة عامة؛ سلّمها للمستخدم نفسه. يُسجَّل الإجراء في سجل التدقيق دون الكلمة.'),
+      err,
+      h('div', { class: 'row end' }, h('button', { type: 'button', class: 'btn', onclick: () => dlg.close() }, 'إلغاء'), btn));
+    mount(dlg, form);
+    dlg.showModal();
+  };
+  const showTemp = (u, pw) => {
+    const dlg = document.getElementById('dialog');
+    const field = h('input', { type: 'text', dir: 'ltr', readonly: true, value: pw, class: 'temp-pw' });
+    mount(dlg, h('form', { method: 'dialog' },
+      h('h2', null, 'عُيّنت كلمة المرور المؤقتة'),
+      h('p', null, `سلّمها إلى ${u.full_name_ar} (${u.email}). تظهر هنا مرة واحدة فقط ولا تُحفظ في المنصة بنص مقروء.`),
+      field,
+      h('p', { class: 'faint' }, 'يدخل بها مرة واحدة، ثم تطلب منه المنصة تعيين كلمة مرور جديدة.'),
+      h('div', { class: 'row end' },
+        h('button', { type: 'button', class: 'btn', onclick: async () => {
+          try { await navigator.clipboard.writeText(pw); toast('نُسخت كلمة المرور'); } catch { field.select(); }
+        } }, 'نسخ'),
+        h('button', { class: 'btn primary', onclick: () => reload() }, 'تم'))));
+    dlg.showModal();
+    field.select();
+  };
+  const sysInfo = u => sys && u.has_password && h('div', { class: 'faint', style: { fontSize: '.8rem', marginTop: '.2rem' } },
+    `آخر دخول: ${fmtLogin(u.last_login_at)}`,
+    u.is_locked && h('span', { class: 'status a-revision', style: { marginInlineStart: '.4rem' } }, 'مقفل مؤقتاً'),
+    u.must_change && h('span', { class: 'status s-draft', style: { marginInlineStart: '.4rem' } }, 'كلمة مؤقتة'));
+  const sysActions = u => sys && u.id !== state.me.id && u.is_active && [
+    h('button', { class: 'btn small', title: 'تعيين كلمة مرور مؤقتة يغيّرها المستخدم عند أول دخول', onclick: () => passwordDialog(u) }, 'كلمة المرور'),
+    u.is_locked && h('button', { class: 'btn small', onclick: () => run(() => api(`/users/${u.id}/unlock`, { method: 'POST' }), 'فُك قفل الحساب') }, 'فك القفل'),
+    u.has_password && h('button', { class: 'btn small', title: 'يُخرج المستخدم من كل أجهزته دون تغيير كلمة المرور',
+      onclick: () => confirm(`إخراج ${u.full_name_ar} من كل أجهزته؟`) && run(() => api(`/users/${u.id}/end-sessions`, { method: 'POST' }), 'أُنهيت جلسات المستخدم') }, 'إنهاء الجلسات'),
+  ];
+
   const row = u => h('tr', { class: u.is_active ? '' : 'inactive' },
     h('td', null, h('b', null, u.full_name_ar), h('div', { class: 'faint', dir: 'ltr', style: { textAlign: 'end' } }, u.email)),
     h('td', null, h('div', { class: 'chips' }, u.roles.length ? u.roles.map(roleChip) : h('span', { class: 'faint' }, 'بلا صلاحيات'),
       h('button', { class: 'btn small', onclick: () => roleDialog(u, data.can_grant_admin, reload) }, '+ دور'))),
     h('td', null, h('span', { class: `status ${u.is_active ? 's-final' : 'a-revision'}` }, u.is_active ? 'نشط' : 'موقوف'),
-      h('div', { class: 'faint', style: { fontSize: '.8rem', marginTop: '.25rem' } }, u.has_password ? 'كلمة المرور معيّنة' : 'لم يعيّن كلمة المرور بعد')),
+      h('div', { class: 'faint', style: { fontSize: '.8rem', marginTop: '.25rem' } }, u.has_password ? 'كلمة المرور معيّنة' : 'لم يعيّن كلمة المرور بعد'),
+      sysInfo(u)),
     h('td', null, h('div', { class: 'row-actions' },
-      h('button', { class: 'btn small', onclick: () => editUser(u) }, 'تعديل'),
+      sys && h('button', { class: 'btn small', onclick: () => editUser(u) }, 'تعديل'),
+      sysActions(u),
       u.is_active && h('button', { class: 'btn small', title: 'يرسل للمستخدم رابطاً لتعيين كلمة المرور (للحساب الجديد أو لمن نسيها)',
         onclick: () => invite(u) }, u.has_password ? 'رابط إعادة التعيين' : 'إرسال رابط التفعيل'),
       h('button', { class: `btn small${u.is_active ? ' danger' : ''}`, onclick: () => run(
@@ -131,6 +191,11 @@ export async function renderUsers() {
         h('p', null, 'أضف منسوبي الكلية وأسند لكل منهم دوره: وكيل الجودة، مدقق الجودة، رئيس القسم، منسق الجودة، عضو هيئة التدريب، أو مقيّم خارجي لدورة محددة. كل تغيير يُسجَّل في سجل التدقيق.')),
       h('div', { class: 'scope-stats' }, h('span', null, h('b', null, num(data.users.length)), ' مستخدم'),
         h('span', null, h('b', null, num(active)), ' نشط'))),
+    sys && inactive.length > 0 && h('section', { class: 'panel' },
+      h('p', { class: 'notice' }, `يوجد ${num(inactive.length)} حساب موقوف لا يستطيع أصحابها الدخول ولا استلام روابط التفعيل.`,
+        ' ', h('button', { class: 'btn small primary', onclick: () => confirm(`إعادة تفعيل ${inactive.length} حساب موقوف؟`) && run(async () => {
+          for (const u of inactive) await api(`/users/${u.id}`, { method: 'PATCH', body: { is_active: true } });
+        }, 'أُعيد تفعيل الحسابات') }, 'إعادة تفعيل الكل'))),
     h('section', { class: 'panel' }, h('header', null, h('h2', null, 'إضافة مستخدم')),
       h('div', { class: 'guide-form' }, name, email, h('button', { class: 'btn primary', onclick: async () => {
         try {

@@ -97,8 +97,11 @@ async def health():
 async def me(user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     cur = await conn.execute("SELECT name_ar FROM institution WHERE id = %s", (user.institution_id,))
     inst = await cur.fetchone()
+    cur = await conn.execute("SELECT must_change FROM user_credential WHERE user_id = %s", (user.id,))
+    cred = await cur.fetchone()
     return {**user.__dict__, "grants": [g.__dict__ for g in user.grants],
-            "institution_name": inst["name_ar"] if inst else None, "env": settings.env}
+            "institution_name": inst["name_ar"] if inst else None, "env": settings.env,
+            "must_change": bool(cred and cred["must_change"])}
 
 
 @app.get("/api/v1/departments", tags=["النظام"])

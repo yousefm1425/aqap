@@ -678,3 +678,9 @@ a.sreq-text:hover { color: var(--primary); text-decoration: underline; }
 .pw-card { max-width: 28rem; }
 .users-table .row-actions { display: flex; gap: .4rem; flex-wrap: wrap; }
 @media (max-width: 480px) { .login { margin: 1.5rem 1rem; padding: 1.25rem; } }
+
+/* لوحة تحكم مدير النظام بالحسابات */
+label.check { display: flex; align-items: center; gap: .45rem; cursor: pointer; font-weight: 500; }
+label.check input { width: auto; margin: 0; }
+input.temp-pw { width: 100%; font: 600 1.35rem/1.4 ui-monospace, Menlo, Consolas, monospace; letter-spacing: .12em;
+  text-align: center; padding: .7rem; border-radius: 10px; background: var(--line-2); }

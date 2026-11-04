@@ -30,10 +30,10 @@ INSERT INTO department(institution_id, code, name_ar) VALUES (1,'CS','تقنية
 INSERT INTO app_user(institution_id, email, full_name_ar) VALUES
  (1,'coord.cs@ynb','منسق الحاسب'), (1,'hod.cs@ynb','رئيس قسم الحاسب'),
  (1,'auditor@ynb','مدقق الجودة'), (1,'dean@ynb','وكيل الجودة'), (1,'coord.ee@ynb','منسق الكهرباء'),
- (1,'auditor.cs@ynb','مدقق من قسم الحاسب');
+ (1,'auditor.cs@ynb','مدقق من قسم الحاسب'), (1,'admin@ynb','مدير النظام');
 INSERT INTO user_role(user_id, role, department_id) VALUES
  (1,'dept_coordinator',1), (2,'hod',1), (3,'quality_auditor',NULL), (4,'quality_dean',NULL), (5,'dept_coordinator',2),
- (6,'quality_auditor',NULL), (6,'faculty',1);
+ (6,'quality_auditor',NULL), (6,'faculty',1), (7,'system_admin',NULL);
 INSERT INTO assessment_cycle(institution_id, framework_id, title_ar, academic_year, starts_on, ends_on)
  VALUES (1,1,'دورة 1447','1447','2026-01-01','2026-12-31');
 INSERT INTO cycle_department VALUES (1,1),(1,2);
