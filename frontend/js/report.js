@@ -45,6 +45,11 @@ function ring(value, size = 92) {
 
 // حركة المؤشرات: تمتلئ العدادات والحلقات من الصفر وتعدّ الأرقام، وتتكرر كل 5 ثوانٍ
 const PERIOD = 5000;
+// عند الطباعة تُفتح مجموعات الخطط المطوية حتى تظهر كاملة في PDF
+window.addEventListener('beforeprint', () => document.querySelectorAll('.final-report details:not([open])').forEach(d => {
+  d.open = true; d.dataset.printOpened = '1'; }));
+window.addEventListener('afterprint', () => document.querySelectorAll('.final-report details[data-print-opened]').forEach(d => {
+  d.open = false; delete d.dataset.printOpened; }));
 function countUp(el, to, ms = 1200) {
   const t0 = performance.now();
   const step = t => { const k = Math.min(1, (t - t0) / ms), e = 1 - (1 - k) ** 3;
@@ -70,17 +75,42 @@ function animateEvery(root, sections) {
   }, PERIOD);
 }
 
+// جدول الأعداد بعرض ثابت يدخل صفحة A4: صف لكل معيار بارتفاع موحّد، وعمود لكل قسم.
+// قسم واحد: أعمدة متحقق/غير متحقق/يحتاج تحسين/المجموع/النسبة. عدة أقسام: خلية مدمجة بثلاثة أرقام ملوّنة لكل قسم.
 function countsTable(title, rows, keyOf, labelOf, depts, subs) {
-  const head1 = h('tr', null, h('th', { rowspan: 2 }, title),
-    depts.map(d => h('th', { colspan: 3, class: 'grp' }, deptName(d))));
-  const head2 = h('tr', null, depts.map(() => [h('th', { class: 'c-good' }, 'متحقق'), h('th', { class: 'c-bad' }, 'غير متحقق'),
-    h('th', { class: 'c-mid' }, 'يحتاج تحسين')]));
-  const body = rows.map(k => h('tr', null, h('th', { scope: 'row' }, labelOf(k)), depts.map(d => {
+  const cell = (d, k) => {
     const xs = subs.filter(x => x.department_id === d && keyOf(x) === k);
     const sum = f => xs.reduce((a, x) => a + Number(x[f] ?? 0), 0);
-    return [h('td', null, num(sum('met_count'))), h('td', null, num(sum('not_met_count'))), h('td', null, num(sum('partial_count')))];
+    return { met: sum('met_count'), not: sum('not_met_count'), mid: sum('partial_count') };
+  };
+  const label = k => h('th', { scope: 'row' }, h('div', { class: 'rowlabel' }, labelOf(k)));
+  if (depts.length === 1) {
+    const d = depts[0];
+    const body = rows.map(k => {
+      const c = cell(d, k), all = c.met + c.not + c.mid;
+      return h('tr', null, label(k), h('td', { class: 'n-good' }, num(c.met)), h('td', { class: 'n-bad' }, num(c.not)),
+        h('td', { class: 'n-mid' }, num(c.mid)), h('td', { class: 'n-tot' }, num(all)),
+        h('td', null, all ? h('span', { class: 'pctbar' }, h('i', { style: { width: `${Math.round(c.met / all * 100)}%` } }),
+          h('b', null, pct(Math.round(c.met / all * 100)))) : '—'));
+    });
+    return h('div', { class: 'table-wrap' }, h('table', { class: 'data counts one' },
+      h('colgroup', null, h('col', { class: 'c-label' }), [1, 2, 3, 4].map(() => h('col', { class: 'c-num' })), h('col', { class: 'c-pct' })),
+      h('thead', null, h('tr', null, h('th', null, title), h('th', { class: 'c-good' }, 'متحقق'), h('th', { class: 'c-bad' }, 'غير متحقق'),
+        h('th', { class: 'c-mid' }, 'يحتاج تحسين'), h('th', null, 'المجموع'), h('th', null, 'نسبة التحقق'))),
+      h('tbody', null, body)));
+  }
+  const body = rows.map(k => h('tr', null, label(k), depts.map(d => {
+    const c = cell(d, k);
+    return h('td', null, h('span', { class: 'trio' }, h('b', { class: 'n-good', title: 'متحقق' }, num(c.met)),
+      h('b', { class: 'n-bad', title: 'غير متحقق' }, num(c.not)), h('b', { class: 'n-mid', title: 'يحتاج تحسين' }, num(c.mid))));
   })));
-  return h('div', { class: 'table-wrap' }, h('table', { class: 'data counts' }, h('thead', null, head1, head2), h('tbody', null, body)));
+  return h('div', { class: 'table-wrap' },
+    h('p', { class: 'trio-legend' }, 'في كل خلية: ', h('b', { class: 'n-good' }, 'متحقق'), ' · ', h('b', { class: 'n-bad' }, 'غير متحقق'),
+      ' · ', h('b', { class: 'n-mid' }, 'يحتاج تحسين')),
+    h('table', { class: 'data counts multi', style: { '--cols': depts.length } },
+      h('colgroup', null, h('col', { class: 'c-label' }), depts.map(() => h('col', { class: 'c-dept' }))),
+      h('thead', null, h('tr', null, h('th', null, title), depts.map(d => h('th', { class: 'grp' }, deptName(d))))),
+      h('tbody', null, body)));
 }
 
 function reasons(p) {
@@ -92,7 +122,7 @@ function reasons(p) {
 }
 
 function planTable(list) {
-  return h('div', { class: 'table-wrap' }, h('table', { class: 'data' },
+  return h('div', { class: 'table-wrap' }, h('table', { class: 'data plan-table' },
       h('thead', null, h('tr', null, h('th', null, 'المتطلب'), h('th', null, 'الملاحظة'),
         h('th', null, 'توصيات المقيّم الخارجي'), h('th', null, 'الإجراءات التحسينية'), h('th', null, 'المسؤول'),
         h('th', null, 'تاريخ الاكتمال'), h('th', null, 'شاهد التحسين'), h('th', null, 'الحالة'))),
@@ -169,6 +199,7 @@ export async function renderReport() {
       kpi('تحتاج تحسين', num(tot('partial_count')), 'k-mid'),
       kpi('غير متحققة', num(tot('not_met_count')), 'k-bad'),
       kpi('خطط تحسين مطلوبة', num(myPlansCount), 'k-plan')));
+  const block = (...kids) => h('div', { class: 'rep-block' }, ...kids);
   const title = (n, t, sub) => h('div', { class: 'sec-title' }, h('i', null, n), h('div', null, h('h2', null, t), sub && h('p', null, sub)));
 
   const gauges = h('section', { class: 'gauges' }, stdCodes.map(([code, title], i) => {
@@ -179,7 +210,7 @@ export async function renderReport() {
 
   const rings = h('section', { class: 'card rings' }, subList.map(x =>
     h('div', { class: 'ringcell anim-item', title: x.sub_standard_title },
-      h('small', null, h('bdi', { class: 'ssub-code' }, x.sub_standard_code), h('br'), x.sub_standard_title), ring(subVal(x.sub_standard_code)))));
+      h('bdi', { class: 'ssub-code' }, x.sub_standard_code), h('small', null, x.sub_standard_title), ring(subVal(x.sub_standard_code)))));
 
   const rankList = (items, cls, label) => h('div', { class: `rankbox ${cls}` }, h('h3', null, label),
     items.length ? h('ol', null, items.map(x => h('li', null, h('span', null, h('bdi', { class: 'ssub-code' }, x.sub_standard_code), ' ', x.sub_standard_title), h('b', null, pct(Math.round(x.v))))))
@@ -208,12 +239,31 @@ export async function renderReport() {
     myPlans.length ? planGroups(myPlans, scopeKey)
       : h('p', { class: 'empty' }, 'لا توجد متطلبات عليها ملاحظات في هذا النطاق.'));
 
-  const page = h('div', { class: 'final-report' }, head,
-    title('١', 'المعايير الرئيسية', 'حد الاجتياز 89.5% — الأخضر مجتاز، والوردي يحتاج تحسيناً، والأحمر أقل من 50%'), gauges,
-    title('٢', 'المعايير الفرعية'), rings,
-    title('٣', 'مجالات القوة والتحسين'), summary,
-    title('٤', 'أعداد المتطلبات حسب نتيجة التقييم'), tables,
-    title('٥', 'المتطلبات التي تتطلب خطة تحسينية'), plansSec);
+  // للطباعة فقط: ترويسة رسمية في أول التقرير، وخانات الاعتماد في آخره
+  const today = new Date();
+  const issued = [today.toLocaleDateString('ar-SA-u-ca-islamic-umalqura-nu-latn', { day: 'numeric', month: 'long', year: 'numeric' }), h('br'),
+    today.toLocaleDateString('ar-SA-u-ca-gregory-nu-latn', { day: 'numeric', month: 'long', year: 'numeric' })];
+  const letter = h('header', { class: 'print-letter' },
+    h('div', { class: 'pl-org' }, h('img', { src: 'img/tvtc-logo.png', alt: 'المؤسسة العامة للتدريب التقني والمهني' }),
+      h('div', null, h('b', null, 'المؤسسة العامة للتدريب التقني والمهني'), h('span', null, state.me.institution_name ?? 'الكلية التقنية التطبيقية بينبع'),
+        h('span', null, 'وكالة الجودة'))),
+    h('div', { class: 'pl-title' }, h('h1', null, 'التقرير النهائي للتقييم'), h('p', null, `${cycle.title_ar} · ${scopeName}`),
+      h('p', null, `أساس الاحتساب: ${BASIS[basis]}`)),
+    h('dl', { class: 'pl-meta' }, h('dt', null, 'تاريخ الإصدار'), h('dd', null, issued),
+      h('dt', null, 'العام التدريبي'), h('dd', null, cycle.academic_year ?? '—'),
+      h('dt', null, 'حد الاجتياز'), h('dd', null, '89.5%')));
+  const sign = (role) => h('div', { class: 'sig' }, h('b', null, role), h('span', null, 'الاسم: '), h('span', null, 'التوقيع: '), h('span', null, 'التاريخ: '));
+  const signatures = h('section', { class: 'print-sign' }, h('h3', null, 'الاعتماد'),
+    h('div', { class: 'sig-row' }, scopeKey === 'all'
+      ? [sign('إعداد: مدقق الجودة'), sign('مراجعة: وكيل الجودة'), sign('اعتماد: عميد الكلية')]
+      : [sign('إعداد: منسق الجودة بالقسم'), sign('مراجعة: رئيس القسم'), sign('اعتماد: وكيل الجودة')]));
+
+  const page = h('div', { class: 'final-report' }, letter, head,
+    block(title('١', 'المعايير الرئيسية', 'حد الاجتياز 89.5% — الأخضر مجتاز، والبرتقالي يحتاج تحسيناً، والأحمر أقل من 50%'), gauges),
+    block(title('٢', 'المعايير الفرعية'), rings),
+    block(title('٣', 'مجالات القوة والتحسين'), summary),
+    h('div', { class: 'rep-block flow' }, title('٤', 'أعداد المتطلبات حسب نتيجة التقييم'), tables),
+    h('div', { class: 'rep-block flow' }, title('٥', 'المتطلبات التي تتطلب خطة تحسينية'), plansSec), signatures);
   animateEvery(page, [[gauges, 120], [rings, 45], [summary, 0]]);
   return page;
 }
