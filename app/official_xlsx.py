@@ -8,6 +8,7 @@ from pathlib import Path
 
 from openpyxl import load_workbook
 from openpyxl.cell.cell import MergedCell
+from .xlsx_safe import harden
 
 TPL_DIR = Path(__file__).parent / "report_templates"
 STATUS_PCT = {"مُنفذ": 1.0, "مُنفذ جزئي": 0.5, "لم يُنفذ": 0.0}
@@ -178,4 +179,5 @@ def fill(key: str, data: dict, institution: str, region: str | None, year: str, 
                 c = ws[f"{col}{n}"]
                 if not isinstance(c, MergedCell) and c.value in ("قيم هنا", "رابط"):
                     c.value = None
+    harden(wb)              # نص المستخدم لا يُنفَّذ كمعادلة عند فتح الملف
     wb.save(out_path)

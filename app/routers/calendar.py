@@ -16,6 +16,7 @@ from psycopg import AsyncConnection
 from pydantic import BaseModel, Field
 
 from ..security import CurrentUser, current_user, forbid, get_conn, load_cycle, not_found
+from ..xlsx_safe import csv_cell, csv_uncell
 
 router = APIRouter(tags=["تقويم الإنجاز"])
 MANAGERS = ("quality_dean", "system_admin")
@@ -160,7 +161,7 @@ async def template(cycle_id: int, user: CurrentUser = Depends(current_user), con
     w = csv.writer(buf)
     w.writerow(HEADERS)
     for r in await cur.fetchall():
-        w.writerow([r["code"], r["title_ar"], r["starts_on"] or "", r["due_on"] or "", "", r["note_ar"] or ""])
+        w.writerow([csv_cell(x) for x in (r["code"], r["title_ar"], r["starts_on"] or "", r["due_on"] or "", "", r["note_ar"] or "")])
     data = ("﻿" + buf.getvalue()).encode("utf-8")
     return Response(data, media_type="text/csv; charset=utf-8",
                     headers={"Content-Disposition": "attachment; filename*=UTF-8''calendar_template.csv"})
@@ -221,7 +222,7 @@ async def import_calendar(cycle_id: int, file: UploadFile = File(...), user: Cur
         rows = _xlsx_rows(raw)
     else:
         text = raw.decode("utf-8-sig", errors="replace")
-        rows = list(csv.reader(io.StringIO(text)))
+        rows = [[csv_uncell(c) for c in r] for r in csv.reader(io.StringIO(text))]
     cur = await conn.execute("SELECT id, code FROM department WHERE institution_id = %s", (user.institution_id,))
     dept_by_code = {r["code"].upper(): r["id"] for r in await cur.fetchall()}
     imported, skipped, errors = 0, 0, []

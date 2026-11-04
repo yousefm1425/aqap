@@ -8,6 +8,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from psycopg import AsyncConnection
+from .xlsx_safe import harden
 
 SELF = {"met": "متحقق", "partial": "متحقق جزئي", "not_met": "غير متحقق", "na": "لا ينطبق"}
 EXT = {"conforms": "منطبق", "not_conforming": "غير منطبق", "insufficient": "غير كافٍ"}
@@ -106,6 +107,7 @@ async def build_basic(conn: AsyncConnection, cycle_id: int, out_path: str) -> di
     _rows(ws, [[p["dept"], p["requirement_code"], p["requirement_text"], p["action_ar"], p["owner"] or "",
                 p["due_date"].isoformat() if p["due_date"] else "", STATUS.get(p["status"], p["status"]),
                 "نعم" if p["is_overdue"] else ""] for p in plans])
+    harden(wb)              # نص المستخدم لا يُنفَّذ كمعادلة عند فتح الملف
     wb.save(out_path)
     return {"mode": "basic", "departments": len(depts), "assessments": len(rows), "plans": len(plans),
             "cycle": cycle["title_ar"] if cycle else None}

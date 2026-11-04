@@ -21,6 +21,7 @@ from openpyxl.worksheet.table import Table, TableStyleInfo
 from .forms_engine import DONE, NOT_DONE, PARTIAL, _num
 from .minutes_pdf import gregorian, hijri
 from .pdf_brand import COLLEGE, ORG, ROOT, SYSTEM
+from .xlsx_safe import harden
 
 FONT = "Segoe UI"
 TEAL_D, TEAL, INK, SOFT, LINE = "126C66", "25AFA5", "1F2D2C", "EEF6F4", "CFDEDB"
@@ -503,5 +504,6 @@ def render_xlsx(doc: dict) -> bytes:
     wb.properties.creator = f"{COLLEGE} — منصة الجودة والاعتماد"
     wb.properties.subject = f"{ctx['kind']} — المتطلب {doc['requirement_code']} — {doc['department_name']}"
     buf = io.BytesIO()
+    harden(wb)              # نص المستخدم لا يُنفَّذ كمعادلة عند فتح الملف
     wb.save(buf)
     return buf.getvalue()
