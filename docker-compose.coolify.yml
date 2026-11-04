@@ -118,6 +118,12 @@ services:
           now=$$(date -u +%s); next=$$(( now / 86400 * 86400 + 1800 )); [ "$$next" -le "$$now" ] && next=$$(( next + 86400 ))
           sleep $$(( next - now )); run
         done
+    healthcheck:
+      test: ["CMD", "rclone", "version"]
+      interval: 5m
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     depends_on:
       - backup
 
