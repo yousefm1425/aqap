@@ -96,6 +96,44 @@ def build_weeks(start: date, breaks: set[date], n: int = WEEKS_PER_SEMESTER) -> 
     return out
 
 
+async def week_starts_for(conn: AsyncConnection, cycle_id: int, semester_start: date, n: int = 20) -> list[date]:
+    """بدايات أسابيع التدريب للفصل الذي يبدأ في semester_start: من تقويم الدورة المحمّل إن وُجد، ثم التقويم المعتمد،
+    وإلا فأسابيع متتالية. الإجازات لا تُحسب أسابيع."""
+    first = sunday(semester_start)
+    cur = await conn.execute(
+        """SELECT semester, starts_on FROM training_week WHERE cycle_id = %s AND week_no = 1""", (cycle_id,))
+    sem = next((r["semester"] for r in await cur.fetchall() if r["starts_on"] == first), None)
+    if sem is not None:
+        cur = await conn.execute("SELECT starts_on FROM training_week WHERE cycle_id = %s AND semester = %s ORDER BY week_no",
+                                 (cycle_id, sem))
+        out = [r["starts_on"] for r in await cur.fetchall()]
+    else:
+        cal = next((c for c in CALENDAR_1448.values() if sunday(c["start"]) == first), None)
+        out = build_weeks(first, cal["breaks"] if cal else set(), n)
+    while len(out) < n:
+        out.append(out[-1] + timedelta(days=7))
+    return out
+
+
+async def realign_quality_tasks(conn: AsyncConnection, cycle_id: int) -> int:
+    """يعيد حساب مواعيد «أعمال الجودة» المحمّلة على أسابيع التقويم التدريبي، محافظاً على يوم التسليم داخل الأسبوع."""
+    cur = await conn.execute("SELECT id, week_no, due_on FROM quality_task WHERE cycle_id = %s AND due_on IS NOT NULL", (cycle_id,))
+    tasks = await cur.fetchall()
+    cur = await conn.execute("SELECT semester, week_no, starts_on FROM training_week WHERE cycle_id = %s", (cycle_id,))
+    tw = {(r["semester"], r["week_no"]): r["starts_on"] for r in await cur.fetchall()}
+    starts = {s: tw[(s, 1)] for s in (1, 2) if (s, 1) in tw}
+    n = 0
+    for t in tasks:
+        off = (t["due_on"].weekday() + 1) % 7
+        assumed = sunday(t["due_on"]) - timedelta(days=7 * (t["week_no"] - 1))   # بداية الفصل التي حُسب منها الموعد
+        sem = min(starts, key=lambda s: abs((starts[s] - assumed).days), default=None)
+        ws = tw.get((sem, t["week_no"])) if sem else None
+        if ws and ws + timedelta(days=off) != t["due_on"]:
+            await conn.execute("UPDATE quality_task SET due_on = %s WHERE id = %s", (ws + timedelta(days=off), t["id"]))
+            n += 1
+    return n
+
+
 def locate(weeks: list[dict], today: date) -> dict:
     """موقع اليوم في التقويم: الفصل والأسبوع، أو آخر أسبوع مرّ إن كان اليوم في إجازة."""
     last = None
@@ -208,6 +246,7 @@ async def seed(cycle_id: int, body: SeedIn, user: CurrentUser = Depends(current_
         weeks = build_weeks(custom, set()) if custom else build_weeks(cal["start"], cal["breaks"])
         for i, wk in enumerate(weeks, 1):
             await conn.execute("INSERT INTO training_week VALUES (%s, %s, %s, %s, %s)", (cycle_id, sem, i, wk, i >= EXAM_FROM))
+    realigned = await realign_quality_tasks(conn, cycle_id)
     cur = await conn.execute(
         """SELECT r.id, r.code FROM requirement r JOIN sub_standard ss ON ss.id = r.sub_standard_id
              JOIN standard s ON s.id = ss.standard_id WHERE s.framework_id = %s AND r.code = ANY(%s)""",
@@ -226,7 +265,8 @@ async def seed(cycle_id: int, body: SeedIn, user: CurrentUser = Depends(current_
                 """INSERT INTO l2_schedule (cycle_id, requirement_id, semester, week_no, label_ar, created_by)
                    VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT DO NOTHING""", (cycle_id, rid, sem, wk, lab, user.id))
             rows += 1
-    return {"requirements": len(found), "occurrences": rows, "missing": sorted(set(PLAN_1447) - set(found))}
+    return {"requirements": len(found), "occurrences": rows, "missing": sorted(set(PLAN_1447) - set(found)),
+            "quality_tasks_realigned": realigned}
 
 
 async def _link(conn: AsyncConnection, cycle_id: int, requirement_id: int, dept: int, evidence_id: int, user_id: int) -> bool:
