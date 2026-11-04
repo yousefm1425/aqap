@@ -8,6 +8,7 @@ from psycopg import AsyncConnection
 
 from .form_templates import EXAMS, SEMESTERS, SKILLS_PERIODS, TEMPLATES
 from .forms_engine import compute
+from .xlsx_safe import harden
 
 STATUS_PCT = {"مُنفذ": 1.0, "مُنفذ جزئي": 0.5, "لم يُنفذ": 0.0}
 
@@ -383,4 +384,5 @@ def to_xlsx(data: dict, institution: str, year: str, out_path: str, region: str 
             if c["type"] == "pct" and isinstance(cell.value, (int, float)):
                 cell.number_format = "0.0%"
     ws.freeze_panes = ws.cell(head + 1, 2)
+    harden(wb)              # نص المستخدم لا يُنفَّذ كمعادلة عند فتح الملف
     wb.save(out_path)
