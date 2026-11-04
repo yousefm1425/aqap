@@ -165,6 +165,7 @@ function renderChangePassword() {
       form.reset();
       errBox(err, null);
       toast('تغيّرت كلمة المرور، وأُنهيت جلساتك على الأجهزة الأخرى');
+      if (state.me.must_change) { state.me.must_change = false; go('scope'); }
     } catch (ex) { errBox(err, ex.message); }
     finally { btn.disabled = false; }
   } },
@@ -174,7 +175,10 @@ function renderChangePassword() {
     h('div', { class: 'field' }, h('label', { for: 'np2' }, 'تأكيد كلمة المرور الجديدة'), p2.wrap),
     h('p', { class: 'faint' }, '8 خانات على الأقل، تجمع بين الحروف والأرقام. تغييرها ينهي جلساتك على الأجهزة الأخرى.'),
     err, btn);
-  return h('section', { class: 'card pw-card' }, h('h2', null, 'تغيير كلمة المرور'), form);
+  return h('section', { class: 'card pw-card' }, h('h2', null, 'تغيير كلمة المرور'),
+    state.me.must_change && h('p', { class: 'notice', role: 'alert' },
+      'دخلت بكلمة مرور مؤقتة عيّنها مدير النظام. عيّن كلمة مرورك الخاصة للمتابعة؛ اكتب الكلمة المؤقتة في خانة «كلمة المرور الحالية».'),
+    form);
 }
 
 async function renderSetPassword(token) {
@@ -254,6 +258,8 @@ export async function route() {
     path = 'scope';                     // صفحة الانطلاق: نطاق المتطلبات ومنها إلى مهمة كل متطلب
     history.replaceState(null, '', `#/${path}`);
   }
+  // كلمة مرور مؤقتة من مدير النظام: لا يتجاوز المستخدم صفحة تغييرها
+  if (state.me.must_change && path !== 'password') { go('password'); return; }
   if (path === 'dashboard' && !canDash()) { go('workspace'); return; }
   if (path === 'users' && !canAdmin()) { go('workspace'); return; }
   const content = h('div', { class: 'skeleton' }, 'جارٍ التحميل…');
@@ -289,7 +295,7 @@ async function boot() {
   try {
     [state.me, state.cycles, state.departments] = await Promise.all([api('/me'), api('/cycles'), api('/departments')]);
     state.cycle = pickCycle();
-    if (!state.me.grants.length) { renderLogin('حسابك مسجّل لكن لم تُسند إليه أي صلاحية بعد. تواصل مع وكالة الجودة.'); return; }
+    if (!state.me.grants.length && !state.me.must_change) { renderLogin('حسابك مسجّل لكن لم تُسند إليه أي صلاحية بعد. تواصل مع وكالة الجودة.'); return; }
     await route();
   } catch (ex) {
     if (!(ex instanceof ApiError && ex.status === 401)) renderLogin(ex.message);

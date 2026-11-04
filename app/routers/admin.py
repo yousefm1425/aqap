@@ -4,6 +4,8 @@
   لا يمنح وكيل الجودة دور «مدير النظام»، ولا يوقف أحد حسابه بنفسه. كل تغيير في سجل التدقيق.
 - الأدلة: روابط أدلة ومراجع يضيفها وكيل الجودة ويطّلع عليها الجميع.
 """
+import json
+import secrets
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -13,7 +15,7 @@ from pydantic import BaseModel, Field
 from ..config import settings
 from ..mailer import mail_configured
 from ..security import CurrentUser, current_user, forbid, get_conn, not_found
-from .auth import create_link_token, link_url, send_link
+from .auth import create_link_token, link_url, send_link, set_password
 
 router = APIRouter(tags=["الإدارة"])
 MANAGERS = ("quality_dean", "system_admin")
@@ -30,6 +32,10 @@ class UserPatch(BaseModel):
     full_name_ar: str | None = Field(None, min_length=3, max_length=200)
     email: str | None = Field(None, pattern=r"^[^@\s]+@[^@\s]+$", max_length=200)
     is_active: bool | None = None
+
+
+class PasswordIn(BaseModel):
+    password: str | None = Field(None, max_length=128)   # فارغ = تولّد المنصة كلمة مؤقتة قوية
 
 
 class RoleIn(BaseModel):
@@ -52,6 +58,26 @@ def _manager(user: CurrentUser) -> None:
         raise forbid("إدارة المستخدمين والأدلة من صلاحية وكيل الجودة")
 
 
+def _sysadmin(user: CurrentUser) -> None:
+    if not user.has("system_admin"):
+        raise forbid("هذه العملية من صلاحية مدير النظام فقط")
+
+
+def _temp_password() -> str:
+    # 12 خانة بلا الأحرف الملتبسة (0/O، 1/l/I) لتُملى أو تُنسخ بسهولة؛ حروف وأرقام دائماً
+    letters, digits = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ", "23456789"
+    while True:
+        pw = "".join(secrets.choice(letters + digits) for _ in range(12))
+        if any(c in digits for c in pw) and any(c in letters for c in pw):
+            return pw
+
+
+async def _log(conn, user: CurrentUser, target_id: int, action: str) -> None:
+    """عمليات الحساب (كلمة المرور، القفل، الجلسات) خارج مشغّلات التدقيق، فتُسجَّل هنا صراحة — بلا أي سر."""
+    await conn.execute("INSERT INTO audit_log (table_name, row_key, action, new_data, actor_id) VALUES ('user_credential', %s, %s, %s, %s)",
+                       (str(target_id), action, json.dumps({"by": user.full_name_ar}, ensure_ascii=False), user.id))
+
+
 async def _actor(conn, user):
     await conn.execute("SELECT set_config('aqap.user_id', %s, true)", (str(user.id),))
 
@@ -72,6 +98,9 @@ async def list_users(user: CurrentUser = Depends(current_user), conn: AsyncConne
     cur = await conn.execute(
         """SELECT u.id, u.email, u.full_name_ar, u.is_active, u.created_at,
                   EXISTS (SELECT 1 FROM user_credential c WHERE c.user_id = u.id) AS has_password,
+                  (SELECT c.last_login_at FROM user_credential c WHERE c.user_id = u.id) AS last_login_at,
+                  (SELECT c.locked_until > now() FROM user_credential c WHERE c.user_id = u.id) IS TRUE AS is_locked,
+                  (SELECT c.must_change FROM user_credential c WHERE c.user_id = u.id) IS TRUE AS must_change,
                   COALESCE(json_agg(json_build_object('id', r.id, 'role', r.role, 'department_id', r.department_id,
                            'department_name', d.name_ar, 'cycle_id', r.cycle_id, 'valid_to', r.valid_to)
                            ORDER BY r.id) FILTER (WHERE r.id IS NOT NULL), '[]') AS roles
@@ -82,7 +111,12 @@ async def list_users(user: CurrentUser = Depends(current_user), conn: AsyncConne
                OR EXISTS (SELECT 1 FROM user_role x JOIN assessment_cycle c ON c.id = x.cycle_id
                            WHERE x.user_id = u.id AND c.institution_id = %(i)s)
             GROUP BY u.id ORDER BY u.is_active DESC, u.full_name_ar""", {"i": user.institution_id})
-    return {"users": await cur.fetchall(), "can_grant_admin": user.has("system_admin")}
+    is_sys = user.has("system_admin")
+    rows = await cur.fetchall()
+    if not is_sys:                    # تفاصيل الدخول لمدير النظام فقط
+        for r in rows:
+            r.pop("last_login_at"); r.pop("is_locked"); r.pop("must_change")
+    return {"users": rows, "can_grant_admin": is_sys, "is_sysadmin": is_sys}
 
 
 @router.post("/users", status_code=201)
@@ -115,6 +149,8 @@ async def patch_user(user_id: int, body: UserPatch, user: CurrentUser = Depends(
                      conn: AsyncConnection = Depends(get_conn, scope="function")):
     _manager(user)
     await _own_user(conn, user, user_id)
+    if (body.full_name_ar is not None or body.email is not None) and not user.has("system_admin"):
+        raise forbid("تعديل اسم المستخدم وبريده من صلاحية مدير النظام فقط")
     if body.is_active is False and user_id == user.id:
         raise forbid("لا يمكنك إيقاف حسابك")
     await _actor(conn, user)
@@ -130,6 +166,50 @@ async def patch_user(user_id: int, body: UserPatch, user: CurrentUser = Depends(
     if body.is_active is not None:
         await conn.execute("UPDATE app_user SET is_active = %s WHERE id = %s", (body.is_active, user_id))
     return {"updated": True}
+
+
+# ---------------------------------------------------------------- لوحة تحكم مدير النظام بالحسابات
+@router.post("/users/{user_id}/password")
+async def admin_set_password(user_id: int, body: PasswordIn, user: CurrentUser = Depends(current_user),
+                             conn: AsyncConnection = Depends(get_conn, scope="function")):
+    """كلمة مرور مؤقتة يعيّنها مدير النظام: تُعرض له مرة واحدة، وتنتهي بها جلسات المستخدم، ويُلزَم بتغييرها عند أول دخول."""
+    _sysadmin(user)
+    if user_id == user.id:
+        raise forbid("لتغيير كلمة مرورك استخدم «تغيير كلمة المرور» من قائمة حسابك")
+    target = await _own_user(conn, user, user_id)
+    if not target["is_active"]:
+        raise forbid("الحساب موقوف؛ فعّله أولاً")
+    generated = not (body.password and body.password.strip())
+    pw = _temp_password() if generated else body.password
+    await set_password(conn, user_id, pw, must_change=True)
+    await conn.execute("UPDATE auth_token SET used_at = now() WHERE user_id = %s AND used_at IS NULL", (user_id,))
+    await _log(conn, user, user_id, "admin_set_password")
+    return {"password": pw if generated else None, "must_change": True}
+
+
+@router.post("/users/{user_id}/unlock")
+async def admin_unlock(user_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
+    """يفك قفل الدخول المؤقت (بعد المحاولات الخاطئة) دون تغيير كلمة المرور."""
+    _sysadmin(user)
+    await _own_user(conn, user, user_id)
+    await conn.execute("UPDATE user_credential SET failed_count = 0, locked_until = NULL WHERE user_id = %s", (user_id,))
+    await _log(conn, user, user_id, "admin_unlock")
+    return {"unlocked": True}
+
+
+@router.post("/users/{user_id}/end-sessions")
+async def admin_end_sessions(user_id: int, user: CurrentUser = Depends(current_user),
+                             conn: AsyncConnection = Depends(get_conn, scope="function")):
+    """يُخرج المستخدم من كل أجهزته (مثلاً عند فقد جهاز)؛ كلمة المرور نفسها تبقى."""
+    _sysadmin(user)
+    if user_id == user.id:
+        raise forbid("لا يمكنك إنهاء جلستك من هنا؛ استخدم «خروج»")
+    await _own_user(conn, user, user_id)
+    cur = await conn.execute("UPDATE user_credential SET changed_at = clock_timestamp() WHERE user_id = %s", (user_id,))
+    if not cur.rowcount:
+        raise forbid("المستخدم لم يعيّن كلمة مرور بعد، فلا جلسات له")
+    await _log(conn, user, user_id, "admin_end_sessions")
+    return {"ended": True}
 
 
 @router.post("/users/{user_id}/roles", status_code=201)

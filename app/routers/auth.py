@@ -88,7 +88,7 @@ async def login(body: LoginIn):
     email = body.email.strip().lower()
     async with db.transaction() as conn:
         cur = await conn.execute(
-            """SELECT u.id, u.email, c.password_hash, c.failed_count, c.locked_until, c.changed_at
+            """SELECT u.id, u.email, c.password_hash, c.failed_count, c.locked_until, c.changed_at, c.must_change
                  FROM app_user u LEFT JOIN user_credential c ON c.user_id = u.id
                 WHERE u.is_active AND lower(u.email) = %s""", (email,))
         row = await cur.fetchone()
@@ -112,7 +112,8 @@ async def login(body: LoginIn):
                             "أو عيّن كلمة مرور جديدة من «نسيت كلمة المرور».")
     if not ok:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, BAD_LOGIN)
-    return {"access_token": issue_token(row["email"], pv=password_version(row["changed_at"])), "token_type": "bearer"}
+    return {"access_token": issue_token(row["email"], pv=password_version(row["changed_at"])), "token_type": "bearer",
+            "must_change": row["must_change"]}
 
 
 @router.post("/forgot", dependencies=[Depends(limit("forgot", 5, 300))])
@@ -155,16 +156,20 @@ async def check_link(token: str):
     return {"purpose": row["purpose"], "email": row["email"], "full_name_ar": row["full_name_ar"]}
 
 
-async def _set_password(conn: AsyncConnection, user_id: int, password: str) -> datetime:
+async def set_password(conn: AsyncConnection, user_id: int, password: str, must_change: bool = False) -> datetime:
+    """يعيّن كلمة المرور ويفك القفل وينهي الجلسات السابقة. must_change للكلمة المؤقتة التي يعيّنها مدير النظام."""
     problem = password_problem(password)
     if problem:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, problem)
     cur = await conn.execute(
-        """INSERT INTO user_credential (user_id, password_hash, changed_at) VALUES (%s, %s, clock_timestamp())
+        """INSERT INTO user_credential (user_id, password_hash, changed_at, must_change) VALUES (%s, %s, clock_timestamp(), %s)
            ON CONFLICT (user_id) DO UPDATE SET password_hash = EXCLUDED.password_hash, changed_at = EXCLUDED.changed_at,
-                                               failed_count = 0, locked_until = NULL
-           RETURNING changed_at""", (user_id, hash_password(password)))
+                                               failed_count = 0, locked_until = NULL, must_change = EXCLUDED.must_change
+           RETURNING changed_at""", (user_id, hash_password(password), must_change))
     return (await cur.fetchone())["changed_at"]
+
+
+_set_password = set_password
 
 
 @router.post("/reset", dependencies=[Depends(limit("reset", 15, 300))])

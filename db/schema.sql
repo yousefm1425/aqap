@@ -2233,7 +2233,8 @@ CREATE TABLE IF NOT EXISTS user_credential (
   changed_at     timestamptz NOT NULL DEFAULT now(),
   failed_count   int NOT NULL DEFAULT 0,
   locked_until   timestamptz,
-  last_login_at  timestamptz
+  last_login_at  timestamptz,
+  must_change    boolean NOT NULL DEFAULT false   -- كلمة مرور مؤقتة من مدير النظام: تُغيَّر عند أول دخول
 );
 -- روابط لمرة واحدة: استعادة كلمة المرور، ودعوة حساب جديد لتعيينها. تُحفظ بصمة الرمز فقط.
 CREATE TABLE IF NOT EXISTS auth_token (
