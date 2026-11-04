@@ -4,6 +4,8 @@ import { deptName, go, parseRoute, state, userScope } from './app.js';
 import { date, h, mount, num, toast } from './ui.js';
 
 const ST = { done: 'منجز', overdue: 'متأخر', soon: 'يقترب', upcoming: 'قادم' };
+// مصادر المواعيد: ما يرفعه وكيل الجودة في التقويم، وما يأتي تلقائياً من «أعمال الجودة» و«الخط الزمني للمستوى الثاني»
+const SRC = { deadline: 'مواعيد الإنجاز', quality: 'أعمال الجودة', l2: 'الخط الزمني للمستوى الثاني' };
 const MONTHS = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
 const DAYS = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
 const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -58,8 +60,14 @@ export async function renderCalendar() {
     if (!seen.has(a.sub_standard_code)) { seen.add(a.sub_standard_code); targets.push({ code: a.sub_standard_code, label: `معيار فرعي: ${a.sub_standard_title}` }); }
     if (!seen.has(a.requirement_code)) { seen.add(a.requirement_code); targets.push({ code: a.requirement_code, label: `متطلب: ${a.requirement_text}` }); }
   }
-  const items = data.deadlines;
-  const reload = () => go('calendar', { dept: dept ?? '', m: iso(month).slice(0, 7), t: Date.now() });
+  const src = Object.keys(SRC).includes(params.src) ? params.src : '';
+  const all = [...data.deadlines.map(x => ({ ...x, source: 'deadline' })), ...(data.feeds ?? [])]
+    .sort((a, b) => String(a.due_on).localeCompare(String(b.due_on)));
+  const items = src ? all.filter(x => x.source === src) : all;
+  const nav = (over = {}) => go('calendar', { dept: dept ?? '', m: iso(month).slice(0, 7), src, ...over });
+  const reload = () => nav({ t: Date.now() });
+  const open = x => x.source === 'quality' ? go('quality', { dept: dept ?? '' })
+    : go('timeline', { dept: dept ?? '', sem: x.semester });
   const count = s => items.filter(x => x.status === s).length;
 
   const fileIn = h('input', { type: 'file', accept: '.csv,.xlsx', hidden: true, onchange: async e => {
@@ -75,15 +83,15 @@ export async function renderCalendar() {
 
   const hero = h('header', { class: 'scope-hero cal-hero' },
     h('div', null, h('h1', null, 'تقويم الإنجاز'),
-      h('p', null, 'مواعيد إنجاز المعايير الفرعية والمتطلبات التي يرفعها وكيل الجودة. يُحتسب الإنجاز برفع القسم لتقديراته في الموعد، '
-        + 'والموعد الخاص بمتطلب أو بقسم يغلب الموعد العام.'),
+      h('p', null, 'كل مواعيد الجودة في مكان واحد: مواعيد الإنجاز التي يرفعها وكيل الجودة، ومواعيد «أعمال الجودة» و«الخط الزمني للمستوى الثاني» '
+        + 'تظهر تلقائياً. الإنجاز يُحتسب بتسليم الأقسام في كل موعد.'),
       data.can_edit && h('div', { class: 'row cal-actions' },
         h('button', { class: 'btn gold', onclick: () => deadlineDialog(cycle, targets, depts, reload) }, '+ إضافة موعد'),
         h('button', { class: 'btn ghost', onclick: () => fileIn.click() }, 'رفع التقويم (Excel / CSV)'),
         h('button', { class: 'btn ghost', onclick: () => apiDownload(`/cycles/${cycle.id}/calendar/template`, 'قالب_تقويم_الإنجاز.csv')
           .catch(ex => toast(ex.message, 'error')) }, 'تنزيل القالب'), fileIn)),
     h('div', { class: 'scope-pick' },
-      depts.length > 1 && h('label', null, 'القسم ', h('select', { onchange: e => go('calendar', { dept: e.target.value, m: iso(month).slice(0, 7) }) },
+      depts.length > 1 && h('label', null, 'القسم ', h('select', { onchange: e => nav({ dept: e.target.value }) },
         h('option', { value: '' }, 'كل الأقسام'), depts.map(d => h('option', { value: String(d), selected: d === dept }, deptName(d))))),
       h('div', { class: 'scope-stats' },
         h('span', null, h('b', null, num(items.length)), ' موعد'),
@@ -104,11 +112,12 @@ export async function renderCalendar() {
     const xs = byDay.get(k) || [];
     cells.push(h('div', { class: `cal-cell${k === todayIso ? ' today' : ''}${xs.length ? ' has' : ''}` },
       h('span', { class: 'cal-day' }, num(d)),
-      xs.slice(0, 3).map(x => h('a', { class: `cal-chip st-${x.status}`, href: `#dl-${x.id}`, title: x.target_title },
-        h('bdi', null, x.target_code))),
+      xs.slice(0, 3).map(x => h('a', { class: `cal-chip st-${x.status} src-${x.source}`, href: `#dl-${x.source}-${x.id}`,
+        title: `${SRC[x.source]}: ${x.target_title ?? x.title}` },
+        h('bdi', null, x.source === 'quality' ? 'أعمال' : (x.target_code ?? x.code)))),
       xs.length > 3 && h('span', { class: 'cal-more' }, `+${num(xs.length - 3)}`)));
   }
-  const shift = n => go('calendar', { dept: dept ?? '', m: iso(new Date(month.getFullYear(), month.getMonth() + n, 1)).slice(0, 7) });
+  const shift = n => nav({ m: iso(new Date(month.getFullYear(), month.getMonth() + n, 1)).slice(0, 7) });
   const grid = h('section', { class: 'card cal-month' },
     h('div', { class: 'cal-nav' },
       h('button', { class: 'btn small', onclick: () => shift(-1), 'aria-label': 'الشهر السابق' }, '›'),
@@ -118,19 +127,40 @@ export async function renderCalendar() {
     h('div', { class: 'legend cal-legend' }, Object.entries(ST).map(([k, v]) => h('span', null, h('i', { class: `cal-chip st-${k}` }), v))));
 
   // القائمة الزمنية
+  // القائمة تعرض شهر الشبكة المعروض فقط
+  const ym = iso(month).slice(0, 7);
+  const monthItems = items.filter(x => String(x.due_on).startsWith(ym));
   const groups = new Map();
-  for (const x of items) {
+  for (const x of monthItems) {
     const d = new Date(`${x.due_on}T00:00:00`), key = `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
     if (!groups.has(key)) groups.set(key, []); groups.get(key).push(x);
   }
+  const feedCard = x => {
+    const left = x.status === 'done' ? 'اكتمل' : x.days_left < 0 ? `متأخر ${num(-x.days_left)} يوم` : x.days_left === 0 ? 'ينتهي اليوم' : `باقي ${num(x.days_left)} يوم`;
+    const p = x.total ? Math.round((x.done / x.total) * 100) : 0;
+    const d = new Date(`${x.due_on}T00:00:00`);
+    return h('article', { class: `dl st-${x.status} src-${x.source}`, id: `dl-${x.source}-${x.id}` },
+      h('div', { class: 'dl-date' }, h('b', null, num(d.getDate())), h('span', null, MONTHS[d.getMonth()])),
+      h('div', { class: 'dl-body' },
+        h('div', { class: 'dl-top' }, h('span', { class: `dl-src src-${x.source}` }, SRC[x.source]),
+          x.source === 'l2' ? h('bdi', { class: 'ssub-code' }, x.code) : h('span', { class: 'dl-kind' }, x.code),
+          h('span', { class: `chip st-${x.status}` }, ST[x.status])),
+        h('h3', null, x.title),
+        h('p', { class: 'muted' }, `${date(x.due_on)} · ${left}`, x.note_ar && ` · ${x.note_ar}`),
+        h('div', { class: 'dl-prog' }, h('div', { class: 'dl-bar' }, h('i', { style: { width: `${p}%` } })),
+          h('span', null, x.total ? `أنجزته ${num(x.done)} من ${num(x.total)} ${x.total === 1 ? 'قسم' : 'أقسام'} (${num(p)}%)` : 'لا أقسام في النطاق'))),
+      h('button', { class: 'btn small', onclick: () => open(x) }, 'فتح'));
+  };
   const card = x => {
+    if (x.source !== 'deadline') return feedCard(x);
     const p = x.total ? Math.round((x.done / x.total) * 100) : 0;
     const left = x.status === 'done' ? 'اكتمل' : x.days_left < 0 ? `متأخر ${num(-x.days_left)} يوم` : x.days_left === 0 ? 'ينتهي اليوم' : `باقي ${num(x.days_left)} يوم`;
-    return h('article', { class: `dl st-${x.status}`, id: `dl-${x.id}` },
+    return h('article', { class: `dl st-${x.status}`, id: `dl-deadline-${x.id}` },
       h('div', { class: 'dl-date' }, h('b', null, num(new Date(`${x.due_on}T00:00:00`).getDate())),
         h('span', null, MONTHS[new Date(`${x.due_on}T00:00:00`).getMonth()])),
       h('div', { class: 'dl-body' },
         h('div', { class: 'dl-top' }, h('bdi', { class: 'ssub-code' }, x.target_code),
+          h('span', { class: 'dl-src src-deadline' }, SRC.deadline),
           h('span', { class: 'dl-kind' }, x.target_kind === 'sub_standard' ? 'معيار فرعي' : `متطلب في ${x.sub_standard_code}`),
           h('span', { class: `chip st-${x.status}` }, ST[x.status]),
           h('span', { class: 'chip' }, x.department_name ?? 'كل الأقسام')),
@@ -142,8 +172,17 @@ export async function renderCalendar() {
         try { await api(`/calendar/${x.id}`, { method: 'DELETE' }); toast('حُذف الموعد'); reload(); } catch (ex) { toast(ex.message, 'error'); }
       } }, 'حذف'));
   };
-  const listSec = h('section', { class: 'card cal-list' },
-    items.length ? [...groups].map(([g, xs]) => h('div', null, h('h3', { class: 'cal-group' }, g), xs.map(card)))
+  const srcTabs = h('div', { class: 'cal-src', role: 'group', 'aria-label': 'مصدر المواعيد' },
+    [['', 'كل المواعيد'], ...Object.entries(SRC)].map(([k, t]) => h('button', { type: 'button', class: k === src ? 'on' : '',
+      'aria-pressed': String(k === src), onclick: () => nav({ src: k }) }, t,
+      h('small', null, num(k ? all.filter(x => x.source === k).length : all.length)))));
+  const listSec = h('section', { class: 'card cal-list' }, srcTabs,
+    monthItems.length ? [...groups].map(([g, xs]) => h('div', null, h('h3', { class: 'cal-group' }, `مواعيد ${g}`), xs.map(card)))
+      : items.length ? h('div', { class: 'empty' }, h('h2', null, `لا مواعيد في ${MONTHS[month.getMonth()]} ${month.getFullYear()}`),
+        h('p', null, 'انتقل بين الأشهر من أسهم التقويم.'))
+      : src ? h('div', { class: 'empty' }, h('h2', null, `لا مواعيد من «${SRC[src]}»`),
+        h('p', null, src === 'deadline' ? 'ترفعها وكالة الجودة من القالب أو بزر «إضافة موعد».'
+          : src === 'quality' ? 'تظهر بعد تحميل جدول أعمال الجودة من صفحته.' : 'تظهر بعد تحميل الخط الزمني من صفحته.'))
       : h('div', { class: 'empty' }, h('h2', null, 'لم يُرفع تقويم بعد'),
         h('p', null, data.can_edit ? 'نزّل القالب، واكتب تواريخ الانتهاء أمام كل معيار فرعي، ثم ارفعه. أو أضف المواعيد واحداً واحداً.'
           : 'يظهر هنا تقويم الإنجاز بعد أن ترفعه وكالة الجودة.')));

@@ -76,7 +76,50 @@ async def calendar(cycle_id: int, department_id: int | None = None, user: Curren
     for r in rows:
         r["status"] = _status(r["done"], r["total"], r["due_on"], today)
         r["days_left"] = (r["due_on"] - today).days
-    return {"can_edit": user.has(*MANAGERS), "today": today, "deadlines": rows}
+    feeds = await _feeds(conn, cycle_id, all_depts, depts, department_id, today)
+    return {"can_edit": user.has(*MANAGERS), "today": today, "deadlines": rows, "feeds": feeds}
+
+
+async def _feeds(conn: AsyncConnection, cycle_id: int, all_depts: bool, depts: list[int], department_id: int | None,
+                 today: date) -> list[dict]:
+    """مواعيد تظهر في التقويم تلقائياً دون رفع: «أعمال الجودة» ومواعيد «الخط الزمني للمستوى الثاني».
+    الإنجاز = الأقسام التي سلّمت (أو «لا ينطبق») ÷ أقسام النطاق."""
+    cur = await conn.execute(
+        """SELECT department_id FROM cycle_department WHERE cycle_id = %(c)s AND (%(all)s OR department_id = ANY(%(d)s))
+              AND (%(dept)s::bigint IS NULL OR department_id = %(dept)s)""",
+        {"c": cycle_id, "all": all_depts, "d": depts, "dept": department_id})
+    ids = [r["department_id"] for r in await cur.fetchall()]
+    total = len(ids)
+    out = []
+    from .patterns import activation
+    patterns_on = await activation(conn, cycle_id) is not None
+    cur = await conn.execute(
+        """SELECT t.id, t.week_no, t.title_ar, t.due_on, t.due_hint_ar, t.condition_ar, t.depends_on,
+                  count(s.id) FILTER (WHERE s.department_id = ANY(%(ids)s)) AS done
+             FROM quality_task t LEFT JOIN quality_task_submission s ON s.task_id = t.id AND s.status IN ('submitted', 'approved', 'na')
+            WHERE t.cycle_id = %(c)s AND t.due_on IS NOT NULL GROUP BY t.id""", {"c": cycle_id, "ids": ids})
+    for t in await cur.fetchall():
+        if t["depends_on"] == "patterns" and not patterns_on:
+            continue                                   # مهام أنماط التدريب لا تنطبق قبل اعتمادها
+        out.append({"source": "quality", "id": t["id"], "due_on": t["due_on"], "code": f"أسبوع {t['week_no']}",
+                    "title": t["title_ar"], "note_ar": t["condition_ar"] or t["due_hint_ar"], "done": t["done"], "total": total})
+    cur = await conn.execute(
+        """SELECT s.id, s.semester, s.week_no, w.starts_on, r.code, r.text_ar,
+                  count(p.id) FILTER (WHERE p.department_id = ANY(%(ids)s)) AS done
+             FROM l2_schedule s JOIN requirement r ON r.id = s.requirement_id
+             JOIN training_week w ON w.cycle_id = s.cycle_id AND w.semester = s.semester AND w.week_no = s.week_no
+             LEFT JOIN l2_progress p ON p.schedule_id = s.id
+            WHERE s.cycle_id = %(c)s GROUP BY s.id, w.starts_on, r.code, r.text_ar, r.sort_order""", {"c": cycle_id, "ids": ids})
+    for o in await cur.fetchall():
+        out.append({"source": "l2", "id": o["id"], "due_on": o["starts_on"] + timedelta(days=4),   # نهاية الأسبوع (الخميس)
+                    "code": o["code"], "title": o["text_ar"], "semester": o["semester"], "week_no": o["week_no"],
+                    "note_ar": f"الأسبوع {o['week_no']} من الفصل {'الأول' if o['semester'] == 1 else 'الثاني'}",
+                    "done": o["done"], "total": total})
+    for f in out:
+        f["status"] = _status(f["done"], f["total"], f["due_on"], today)
+        f["days_left"] = (f["due_on"] - today).days
+    out.sort(key=lambda f: (f["due_on"], f["source"], f["code"]))
+    return out
 
 
 async def _resolve(conn, cycle: dict, code: str) -> tuple[int | None, int | None]:

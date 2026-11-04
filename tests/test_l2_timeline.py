@@ -172,3 +172,27 @@ def test_quality_tasks_follow_training_weeks(client):
     assert due[13] == {"2026-11-18"}                                   # قبل إجازة الخريف: الأربعاء كما هو
     assert due[14] == {"2026-12-01", "2026-12-03"}                     # بعد الإجازة: الأسبوع 14 يبدأ 29 نوفمبر
     assert due[19] == {"2027-01-07"}                                   # آخر أيام الاختبارات النهائية
+
+
+def test_calendar_shows_quality_tasks_and_timeline(client):
+    dean, coord = h(client, "dean@ynb"), h(client, "coord@ynb")
+    client.post(f"{API}/cycles/1/l2-timeline/seed", headers=dean, json={"replace": True})
+    data = client.get(f"{API}/cycles/1/calendar", headers=dean).json()
+    feeds = data["feeds"]
+    q = [f for f in feeds if f["source"] == "quality"]
+    l2 = [f for f in feeds if f["source"] == "l2"]
+    assert q and l2 and data["deadlines"] == []
+    assert not any("أنماط" in f["title"] for f in q)                   # أنماط التدريب غير معتمدة: لا تظهر
+    wk3 = next(f for f in l2 if f["code"] == "1-1-1")
+    assert wk3["due_on"] == "2026-09-10" and wk3["total"] == 2 and wk3["done"] == 0   # خميس الأسبوع 3
+    assert all(f["code"] != "6-3-1" or f["week_no"] for f in l2)         # المواعيد بلا أسبوع لا تظهر في التقويم
+
+    # تأشير القسم ينعكس على الإنجاز، والمنسق يرى قسمه فقط
+    client.post(f"{API}/l2-timeline/{wk3['id']}/progress", headers=coord,
+                json={"department_id": 1, "url": URL})
+    mine = next(f for f in client.get(f"{API}/cycles/1/calendar", headers=coord).json()["feeds"]
+                if f["source"] == "l2" and f["id"] == wk3["id"])
+    assert (mine["done"], mine["total"], mine["status"]) == (1, 1, "done")
+    alld = next(f for f in client.get(f"{API}/cycles/1/calendar", headers=dean).json()["feeds"]
+                if f["source"] == "l2" and f["id"] == wk3["id"])
+    assert (alld["done"], alld["total"], alld["status"]) == (1, 2, "overdue")
