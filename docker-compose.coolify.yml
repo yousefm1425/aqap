@@ -82,7 +82,7 @@ services:
       - OFFSITE_BUCKET=${OFFSITE_BUCKET:-}
       - OFFSITE_KEY_ID=${OFFSITE_KEY_ID:-}
       - OFFSITE_SECRET=${OFFSITE_SECRET:-}
-      - OFFSITE_PASSPHRASE=${OFFSITE_PASSPHRASE:-}
+      - OFFSITE_ENC_PASSWORD=${OFFSITE_ENC_PASSWORD:-}
       - OFFSITE_PREFIX=aqap
       - OFFSITE_KEEP_DAYS=${OFFSITE_KEEP_DAYS:-200}
     volumes:
@@ -91,16 +91,16 @@ services:
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
-        if [ -z "$$OFFSITE_KEY_ID" ] || [ -z "$$OFFSITE_SECRET" ] || [ -z "$$OFFSITE_BUCKET" ] || [ -z "$$OFFSITE_ENDPOINT" ] || [ -z "$$OFFSITE_PASSPHRASE" ]; then
-          echo "offsite: معطّل — عيّن OFFSITE_ENDPOINT وOFFSITE_BUCKET وOFFSITE_KEY_ID وOFFSITE_SECRET وOFFSITE_PASSPHRASE في Coolify"
+        if [ -z "$$OFFSITE_KEY_ID" ] || [ -z "$$OFFSITE_SECRET" ] || [ -z "$$OFFSITE_BUCKET" ] || [ -z "$$OFFSITE_ENDPOINT" ] || [ -z "$$OFFSITE_ENC_PASSWORD" ]; then
+          echo "offsite: معطّل — عيّن OFFSITE_ENDPOINT وOFFSITE_BUCKET وOFFSITE_KEY_ID وOFFSITE_SECRET وOFFSITE_ENC_PASSWORD في Coolify"
           exec sleep 2147483647
         fi
         export RCLONE_CONFIG_STORE_TYPE=s3 RCLONE_CONFIG_STORE_PROVIDER=Other RCLONE_CONFIG_STORE_ENDPOINT="$$OFFSITE_ENDPOINT"
         export RCLONE_CONFIG_STORE_REGION="$$OFFSITE_REGION" RCLONE_CONFIG_STORE_ACCESS_KEY_ID="$$OFFSITE_KEY_ID"
         export RCLONE_CONFIG_STORE_SECRET_ACCESS_KEY="$$OFFSITE_SECRET" RCLONE_CONFIG_STORE_NO_CHECK_BUCKET=true
         export RCLONE_CONFIG_SAFE_TYPE=crypt RCLONE_CONFIG_SAFE_REMOTE="store:$$OFFSITE_BUCKET/$$OFFSITE_PREFIX"
-        export RCLONE_CONFIG_SAFE_PASSWORD="$$(rclone obscure "$$OFFSITE_PASSPHRASE")"
-        export RCLONE_CONFIG_SAFE_PASSWORD2="$$(rclone obscure "$$OFFSITE_PASSPHRASE-salt")"
+        export RCLONE_CONFIG_SAFE_PASSWORD="$$(rclone obscure "$$OFFSITE_ENC_PASSWORD")"
+        export RCLONE_CONFIG_SAFE_PASSWORD2="$$(rclone obscure "$$OFFSITE_ENC_PASSWORD-salt")"
         run() {
           echo "offsite: بدء النسخ $$(date -u '+%F %T') UTC"
           # copy لا sync: ما يُحذف من السيرفر لا يُحذف من النسخة الخارجية (حماية من الحذف أو التخريب)
