@@ -59,6 +59,7 @@ let authCfg = null;
 const authConfig = async () => authCfg ??= await api('/auth/config').catch(() => ({ dev_login: false, mail: false }));
 
 function authCard(...children) {
+  document.body.classList.remove('has-sidebar', 'side-open');
   return h('div', { class: 'login' },
     h('div', { class: 'login-brand' }, h('img', { src: 'img/tvtc-logo.png', alt: 'المؤسسة العامة للتدريب التقني والمهني' }),
       h('span', null, 'الكلية التقنية التطبيقية بينبع')),
@@ -219,36 +220,104 @@ async function renderSetPassword(token) {
   p1.input.focus();
 }
 
+// ---------------------------------------------------------------- الشريط الجانبي
+const ICONS = {
+  scope: 'M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01',
+  workspace: 'M9 3h6v3H9zM7 4.5H5V21h14V4.5h-2M9 14l2 2 4-4',
+  minutes: 'M14 3H6v18h12V7zM14 3v4h4M9 12h6M9 16h6',
+  forms: 'M4 4h16v16H4zM8 16v-3M12 16V9M16 16v-5',
+  plans: 'M3 17l6-6 4 4 8-8M15 7h6v6',
+  quality: 'M12 3l2.6 5.3 5.9.9-4.2 4.1 1 5.8L12 16.4l-5.3 2.7 1-5.8L3.5 9.2l5.9-.9z',
+  calendar: 'M4 6h16v15H4zM4 10h16M8 3v4M16 3v4',
+  dashboard: 'M4 4h7v7H4zM13 4h7v4h-7zM13 10h7v10h-7zM4 13h7v7H4z',
+  training: 'M3 12h4l3-8 4 16 3-8h4',
+  report: 'M5 4.5A1.5 1.5 0 016.5 3H19v15H6.5A1.5 1.5 0 005 19.5zM5 19.5A1.5 1.5 0 006.5 21H19',
+  college: 'M3 21h18M5 21V9l7-5 7 5v12M9 21v-6h6v6',
+  folders: 'M3 6.5a1 1 0 011-1h5l2 2h9a1 1 0 011 1V18a1 1 0 01-1 1H4a1 1 0 01-1-1z',
+  guides: 'M2 5h7a3 3 0 013 3v13a2 2 0 00-2-2H2zM22 5h-7a3 3 0 00-3 3v13a2 2 0 012-2h8z',
+  users: 'M16 20v-1a4 4 0 00-4-4H6a4 4 0 00-4 4v1M9 11a4 4 0 100-8 4 4 0 000 8zM22 20v-1a4 4 0 00-3-3.9M16 3.1a4 4 0 010 7.8',
+  key: 'M5 11h14v10H5zM8 11V7.5a4 4 0 018 0V11M12 15v2',
+  logout: 'M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9',
+  menu: 'M4 6h16M4 12h16M4 18h16',
+  collapse: 'M13 17l5-5-5-5M6 17l5-5-5-5',
+};
+function icon(name) {
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('aria-hidden', 'true'); svg.setAttribute('class', 'ico');
+  const path = document.createElementNS(NS, 'path');
+  path.setAttribute('d', ICONS[name]);
+  svg.append(path);
+  return svg;
+}
+
+const NAV = () => [
+  ['العمل اليومي', [['scope', 'نطاق المتطلبات'], ['workspace', 'التقديرات والشواهد'], ['minutes', 'المحاضر'], ['forms', 'الخطط والتقارير'],
+    ['plans', 'خطط التحسين'], ['quality', 'أعمال الجودة'], ['calendar', 'التقويم']]],
+  ['المتابعة والتقارير', [canDash() && ['dashboard', 'لوحة المؤشرات'], ['training', 'سير العملية التدريبية'], ['report', 'التقرير النهائي'],
+    canDash() && ['college', 'تقارير الكلية'], ['folders', 'مجلدات الشواهد']]],
+  ['المراجع والإدارة', [['guides', 'الأدلة'], canAdmin() && ['users', 'المستخدمون']]],
+];
+const PAGE_TITLE = { password: 'تغيير كلمة المرور' };
+
+function prefCollapsed(v) {
+  try { if (v === undefined) return localStorage.getItem('aqap.side') === 'mini'; localStorage.setItem('aqap.side', v ? 'mini' : 'full'); }
+  catch { /* التخزين غير متاح — يبقى الشريط مفتوحاً */ }
+  return false;
+}
+
 function shell(content) {
   const { path } = parseRoute();
-  const link = (p, label) => h('a', { href: `#/${p}`, 'aria-current': path === p ? 'page' : null }, label);
-  const cycleSelect = h('select', { 'aria-label': 'دورة التقييم', onchange: e => {
+  const groups = NAV().map(([t, items]) => [t, items.filter(Boolean)]);
+  const title = PAGE_TITLE[path] ?? groups.flatMap(([, i]) => i).find(([p]) => p === path)?.[1] ?? '';
+  const closeDrawer = () => document.body.classList.remove('side-open');
+
+  const cycleSelect = h('select', { class: 'cycle-select', 'aria-label': 'دورة التقييم', onchange: e => {
     state.cycle = state.cycles.find(c => c.id === Number(e.target.value));
     route();
   } }, state.cycles.map(c => h('option', { value: String(c.id) }, `${c.title_ar} (${CYCLE_STATUS[c.status]})`)));
   if (state.cycle) cycleSelect.value = String(state.cycle.id);
 
   const roles = [...new Set(state.me.grants.map(g => ROLE[g.role]))].join('، ');
+  const initial = (state.me.full_name_ar || '؟').trim().replace(/^(د|م|أ)\.\s*/, '')[0];
+  const link = (p, label) => h('a', { href: `#/${p}`, class: 'side-link', title: label, 'aria-current': path === p ? 'page' : null,
+    onclick: closeDrawer }, icon(p), h('span', { class: 'side-label' }, label));
+
+  const side = h('aside', { class: 'sidebar', id: 'sidebar', 'aria-label': 'القائمة الرئيسية' },
+    h('div', { class: 'side-head' },
+      h('a', { class: 'side-brand', href: 'home.html', title: 'منصة الجودة والاعتماد — الصفحة الرئيسية' },
+        h('img', { src: 'img/tvtc-logo-light.png', alt: 'المؤسسة العامة للتدريب التقني والمهني' }),
+        h('span', { class: 'side-label' }, h('b', null, 'منصة الجودة والاعتماد'),
+          h('small', null, state.me.institution_name ?? 'الكلية التقنية التطبيقية بينبع')))),
+    h('nav', { class: 'side-nav', 'aria-label': 'الأقسام الرئيسية' },
+      groups.map(([t, items]) => items.length > 0 && h('div', { class: 'side-group' },
+        h('div', { class: 'side-group-title' }, h('span', { class: 'side-label' }, t)),
+        items.map(([p, label]) => link(p, label))))),
+    h('div', { class: 'side-foot' },
+      h('div', { class: 'side-user', title: roles },
+        h('span', { class: 'avatar' }, initial),
+        h('span', { class: 'side-label' }, h('b', null, state.me.full_name_ar), h('small', null, roles))),
+      h('div', { class: 'side-actions' },
+        h('a', { href: '#/password', class: 'side-link sm', title: 'تغيير كلمة المرور', 'aria-current': path === 'password' ? 'page' : null,
+          onclick: closeDrawer }, icon('key'), h('span', { class: 'side-label' }, 'كلمة المرور')),
+        h('button', { type: 'button', class: 'side-link sm', title: 'تسجيل الخروج',
+          onclick: () => { closeDrawer(); setToken(null); renderLogin(); } }, icon('logout'), h('span', { class: 'side-label' }, 'خروج'))),
+      h('button', { type: 'button', class: 'side-collapse', title: 'طي القائمة / توسيعها', 'aria-label': 'طي القائمة',
+        onclick: () => { const mini = !document.body.classList.contains('side-mini'); document.body.classList.toggle('side-mini', mini); prefCollapsed(mini); } },
+        icon('collapse'))));
+
+  document.body.classList.add('has-sidebar');
+  document.body.classList.toggle('side-mini', prefCollapsed());
   return [
-    h('header', { class: 'topbar' },
-      h('a', { class: 'brand', href: 'home.html', title: 'منصة الجودة والاعتماد — الصفحة الرئيسية' },
-        h('span', { class: 'org-logo' }, h('img', { src: 'img/tvtc-logo-light.png', alt: 'المؤسسة العامة للتدريب التقني والمهني' })),
-        h('span', null, state.me.institution_name ?? 'الكلية التقنية التطبيقية بينبع')),
-      h('nav', { 'aria-label': 'الأقسام الرئيسية' },
-        // الصف الأول: العمل اليومي للأقسام — الصف الثاني: المتابعة والتقارير والإدارة
-        h('div', { class: 'nav-row' },
-          link('scope', 'نطاق المتطلبات'), link('workspace', 'التقديرات والشواهد'), link('minutes', 'المحاضر'), link('forms', 'الخطط والتقارير'),
-          link('plans', 'خطط التحسين'), link('quality', 'أعمال الجودة'), link('calendar', 'التقويم')),
-        h('div', { class: 'nav-row' },
-          canDash() && link('dashboard', 'لوحة المؤشرات'), link('training', 'سير العملية التدريبية'), link('report', 'التقرير النهائي'), canDash() && link('college', 'تقارير الكلية'), link('folders', 'مجلدات الشواهد'),
-          link('guides', 'الأدلة'), canAdmin() && link('users', 'المستخدمون'))),
-      h('div', { class: 'top-side' },
-        state.cycles.length > 0 && cycleSelect,
-        h('div', { class: 'user' },
-          h('span', { title: roles }, state.me.full_name_ar),
-          h('a', { href: '#/password', class: 'pw-link', title: 'تغيير كلمة المرور' }, 'كلمة المرور'),
-          h('button', { onclick: () => { setToken(null); renderLogin(); } }, 'خروج')))),
-    h('main', null, content),
+    side,
+    h('div', { class: 'side-scrim', onclick: closeDrawer }),
+    h('div', { class: 'app-main' },
+      h('header', { class: 'appbar' },
+        h('button', { type: 'button', class: 'menu-btn', 'aria-label': 'فتح القائمة', 'aria-controls': 'sidebar',
+          onclick: () => document.body.classList.add('side-open') }, icon('menu')),
+        h('h1', { class: 'appbar-title' }, title),
+        state.cycles.length > 0 && h('label', { class: 'appbar-cycle' }, h('span', null, 'دورة التقييم'), cycleSelect)),
+      h('main', null, content)),
   ];
 }
 
