@@ -20,7 +20,7 @@
 | `OFFSITE_BUCKET` | اسم الحاوية |
 | `OFFSITE_KEY_ID` | keyID |
 | `OFFSITE_SECRET` | applicationKey (Lock) |
-| `OFFSITE_PASSPHRASE` | عبارة مرور طويلة (Lock) — **احفظها خارج السيرفر؛ بدونها لا يمكن فك النسخ** |
+| `OFFSITE_ENC_PASSWORD` | عبارة مرور طويلة (Lock) — **احفظها خارج السيرفر؛ بدونها لا يمكن فك النسخ** |
 
 ثم Redeploy. سجل خدمة `offsite` يجب أن يُظهر «✓ اكتمل» بعد دقيقتين تقريباً.
 
