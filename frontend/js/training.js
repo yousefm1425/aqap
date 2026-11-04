@@ -5,7 +5,7 @@ import { date, h, mount, num, toast } from './ui.js';
 
 const ATT = '#009C8C';      // الحضور (فيروزي المؤسسة) — مُتحقق من التمييز لعمى الألوان والتباين
 const REC = '#B7791F';      // رصد التحضير
-const BAD = '#C2463D';
+const BAD = '#DC2626';
 const COLS = { 'رقم الحاسب': 'trainer_no', 'اسم المدرب': 'trainer_name', 'رمز المقرر': 'section_ref', 'اسم المقرر': 'course_name',
   'نوع الجدولة': 'schedule_type', 'إجمالي المتدربين': 'total', 'عدد المسجلين': 'registered', 'عدد المحرومين': 'deprived',
   'عدد المنسحبين': 'withdrawn', 'إجمالي التحضير': 'slots', 'تحضير مسجل': 'present', 'غياب مسجل': 'absent',
@@ -281,15 +281,15 @@ function printReport(d, tAtt, tRec, e) {
     h1 { font-size: 18pt; color: #126C66; margin: 14px 0 2px; } .sub { color: #66706f; margin: 0 0 12px; }
     .kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin: 10px 0 14px; }
     .k { border: 1px solid #d6e6e3; border-top: 4px solid #009C8C; border-radius: 8px; padding: 8px; }
-    .k.r { border-top-color: #B7791F; } .k.b { border-top-color: #C2463D; }
+    .k.r { border-top-color: #B7791F; } .k.b { border-top-color: #DC2626; }
     .k small { display: block; color: #66706f; font-size: 8.5pt; } .k b { font-size: 16pt; }
     h2 { font-size: 12.5pt; color: #126C66; border-right: 5px solid #009C8C; padding-right: 8px; margin: 16px 0 8px; break-after: avoid; }
     ul { margin: 0; padding-right: 18px; } li { margin: 3px 0; line-height: 1.7; }
     table { width: 100%; border-collapse: collapse; font-size: 9pt; margin-top: 4px; }
     th { background: #126C66; color: #fff; padding: 5px; } td { border-bottom: 1px solid #e3ecea; padding: 4px 5px; text-align: center; }
-    td:first-child, td:nth-child(2) { text-align: right; } .bad { color: #C2463D; font-weight: 700; }
+    td:first-child, td:nth-child(2) { text-align: right; } .bad { color: #DC2626; font-weight: 700; }
     .legend { font-size: 9pt; color: #555; } .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin: 0 4px 0 10px; }
-    svg { width: 100%; height: auto; } svg .grid { stroke: #e6eeed; } svg .target { stroke: #C2463D; stroke-dasharray: 4 3; }
+    svg { width: 100%; height: auto; } svg .grid { stroke: #e6eeed; } svg .target { stroke: #DC2626; stroke-dasharray: 4 3; }
     svg .tick { font-size: 10px; fill: #78807f; } svg .lbl { font-size: 11px; fill: #1f2d2c; } svg .val { font-size: 10px; fill: #3b4544; }
     .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; } .sign { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-top: 26px; }
     .sign div { border-top: 1px solid #999; padding-top: 6px; text-align: center; color: #555; }
@@ -303,7 +303,7 @@ function printReport(d, tAtt, tRec, e) {
     ${kpi('المتدربون المسجلون', num(c.registered))}${kpi('شعب رصدها ناقص', num(c.incomplete), 'b')}</div>
   <h2>أبرز النتائج</h2><ul>${insights(d, tAtt, tRec).map(x => `<li>${E(x)}</li>`).join('')}</ul>
   <h2>الحضور ورصد التحضير حسب القسم</h2>
-  <div class="legend"><i style="background:${ATT}"></i>الحضور<i style="background:${REC}"></i>رصد التحضير<i style="background:#C2463D;height:2px"></i>المستهدف ${P(tAtt)}</div>${chart1}
+  <div class="legend"><i style="background:${ATT}"></i>الحضور<i style="background:${REC}"></i>رصد التحضير<i style="background:#DC2626;height:2px"></i>المستهدف ${P(tAtt)}</div>${chart1}
   ${chart2 ? `<h2>اتجاه الأسابيع</h2>${chart2}` : ''}
   <h2>ملخص الأقسام</h2><table><tr><th>القسم</th><th>الشعب</th><th>المدربون</th><th>المسجلون</th><th>الحضور</th><th>رصد التحضير</th><th>رصد ناقص</th><th>المحرومون</th><th>المنسحبون</th></tr>${deptRows}</table>
   ${enr}
