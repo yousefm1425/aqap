@@ -70,6 +70,57 @@ services:
       db:
         condition: service_healthy
 
+  # نسخة احتياطية خارج السيرفر: كل يوم 03:30 بتوقيت الرياض تُنسخ نسخ القاعدة والملفات مشفّرة
+  # (rclone crypt — لا يقرأها مزوّد التخزين) إلى تخزين S3 متوافق (Backblaze B2 أو Cloudflare R2...).
+  # تعمل فقط إذا عُيّنت متغيرات OFFSITE_* في Coolify؛ وإلا تبقى خاملة وتكتب ذلك في سجلها.
+  offsite:
+    image: rclone/rclone:1.68
+    restart: unless-stopped
+    environment:
+      - OFFSITE_ENDPOINT=${OFFSITE_ENDPOINT:-}
+      - OFFSITE_REGION=${OFFSITE_REGION:-auto}
+      - OFFSITE_BUCKET=${OFFSITE_BUCKET:-}
+      - OFFSITE_KEY_ID=${OFFSITE_KEY_ID:-}
+      - OFFSITE_SECRET=${OFFSITE_SECRET:-}
+      - OFFSITE_PASSPHRASE=${OFFSITE_PASSPHRASE:-}
+      - OFFSITE_PREFIX=aqap
+      - OFFSITE_KEEP_DAYS=${OFFSITE_KEEP_DAYS:-200}
+    volumes:
+      - backups:/src/db:ro
+      - evidence:/src/files:ro
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        if [ -z "$$OFFSITE_KEY_ID" ] || [ -z "$$OFFSITE_SECRET" ] || [ -z "$$OFFSITE_BUCKET" ] || [ -z "$$OFFSITE_ENDPOINT" ] || [ -z "$$OFFSITE_PASSPHRASE" ]; then
+          echo "offsite: معطّل — عيّن OFFSITE_ENDPOINT وOFFSITE_BUCKET وOFFSITE_KEY_ID وOFFSITE_SECRET وOFFSITE_PASSPHRASE في Coolify"
+          exec sleep 2147483647
+        fi
+        export RCLONE_CONFIG_STORE_TYPE=s3 RCLONE_CONFIG_STORE_PROVIDER=Other RCLONE_CONFIG_STORE_ENDPOINT="$$OFFSITE_ENDPOINT"
+        export RCLONE_CONFIG_STORE_REGION="$$OFFSITE_REGION" RCLONE_CONFIG_STORE_ACCESS_KEY_ID="$$OFFSITE_KEY_ID"
+        export RCLONE_CONFIG_STORE_SECRET_ACCESS_KEY="$$OFFSITE_SECRET" RCLONE_CONFIG_STORE_NO_CHECK_BUCKET=true
+        export RCLONE_CONFIG_SAFE_TYPE=crypt RCLONE_CONFIG_SAFE_REMOTE="store:$$OFFSITE_BUCKET/$$OFFSITE_PREFIX"
+        export RCLONE_CONFIG_SAFE_PASSWORD="$$(rclone obscure "$$OFFSITE_PASSPHRASE")"
+        export RCLONE_CONFIG_SAFE_PASSWORD2="$$(rclone obscure "$$OFFSITE_PASSPHRASE-salt")"
+        run() {
+          echo "offsite: بدء النسخ $$(date -u '+%F %T') UTC"
+          # copy لا sync: ما يُحذف من السيرفر لا يُحذف من النسخة الخارجية (حماية من الحذف أو التخريب)
+          if rclone copy /src/db safe:db --transfers 2 --stats-one-line --stats 0 &&
+             rclone copy /src/files safe:files --transfers 4 --stats-one-line --stats 0; then
+            rclone delete safe:db --min-age "$${OFFSITE_KEEP_DAYS}d" || true
+            date -u '+%F %T UTC' | rclone rcat safe:_last_success.txt
+            echo "offsite: ✓ اكتمل $$(date -u '+%F %T') UTC"
+          else
+            echo "offsite: ✗ فشل النسخ — راجع المفاتيح واسم الحاوية"
+          fi
+        }
+        sleep 90; run
+        while true; do
+          now=$$(date -u +%s); next=$$(( now / 86400 * 86400 + 1800 )); [ "$$next" -le "$$now" ] && next=$$(( next + 86400 ))
+          sleep $$(( next - now )); run
+        done
+    depends_on:
+      - backup
+
 volumes:
   pgdata:
   evidence:
