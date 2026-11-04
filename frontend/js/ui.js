@@ -38,7 +38,7 @@ export const date = v => (v ? new Date(v).toLocaleDateString('ar-SA-u-ca-gregory
 export const dateTime = v => (v ? new Date(v).toLocaleString('ar-SA-u-ca-gregory-nu-latn', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—');
 
 /** حوار نصي يعيد النص أو null عند الإلغاء */
-export function promptText({ title, label, confirm = 'تأكيد', required = true, choices = null }) {
+export function promptText({ title, label, confirm = 'تأكيد', required = true, choices = null, choiceLabel = 'الحكم' }) {
   const dlg = document.getElementById('dialog');
   return new Promise(resolve => {
     const area = h('textarea', { id: 'dlg-text' });
@@ -47,13 +47,13 @@ export function promptText({ title, label, confirm = 'تأكيد', required = tr
     const err = h('p', { class: 'faint', style: { color: 'var(--danger-ink)' } });
     const form = h('form', { method: 'dialog' },
       h('h2', null, title),
-      pick && h('div', { class: 'field' }, h('label', { for: 'dlg-choice' }, 'الحكم'), pick),
+      pick && h('div', { class: 'field' }, h('label', { for: 'dlg-choice' }, choiceLabel), pick),
       h('div', { class: 'field' }, h('label', { for: 'dlg-text' }, label), area, err),
       h('div', { class: 'row end' },
         h('button', { type: 'button', class: 'btn', onclick: () => { dlg.close(); resolve(null); } }, 'إلغاء'),
         h('button', { class: 'btn primary', value: 'ok' }, confirm)));
     form.addEventListener('submit', e => {
-      if (required && !area.value.trim()) { e.preventDefault(); err.textContent = 'اكتب السبب قبل المتابعة'; return; }
+      if (required && !area.value.trim()) { e.preventDefault(); err.textContent = 'هذا الحقل مطلوب'; return; }
       resolve(pick ? { text: area.value.trim(), choice: pick.value } : area.value.trim());
     });
     area.addEventListener('input', () => { err.textContent = ''; });
