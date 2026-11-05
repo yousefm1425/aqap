@@ -132,7 +132,10 @@ def test_marking_permissions(client):
     assert client.post(f"{p}/nope/progress", headers=dean, json={"url": URL}).status_code == 404
     d = client.get(p, headers=coord).json()
     by = {i["key"]: i for i in d["items"]}
-    assert by["1-05-b"]["marks"]["1"]["status"] == "na" and by["1-08-a"]["marks"]["0"]["url"] == URL
+    assert not d["can_manage"] and {i["scope"] for i in d["items"]} == {"dept"}     # القسم يرى بنوده فقط
+    assert by["1-05-b"]["marks"]["1"]["status"] == "na" and "1-08-a" not in by
+    dean_items = {i["key"]: i for i in client.get(p, headers=dean).json()["items"]}
+    assert dean_items["1-08-a"]["marks"]["0"]["url"] == URL and dean_items["1-05-b"]["scope"] == "dept"
     assert "2" not in by["1-05-b"]["marks"]
     assert client.delete(f"{p}/1-05-b/progress?department_id=1", headers=coord).status_code == 200
     assert client.delete(f"{p}/1-05-b/progress?department_id=1", headers=coord).status_code == 404

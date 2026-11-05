@@ -107,7 +107,10 @@ async def periodic(cycle_id: int, user: CurrentUser = Depends(current_user),
                              (cycle_id,))
     qtasks = await cur.fetchall()
     items = []
+    manager = user.has(*MANAGERS)
     for i in CATALOG_1448:
+        if i.scope == "college" and not manager:      # القسم يرى بنوده فقط
+            continue
         start = ws.get((i.semester, i.week)) if i.week else None
         related = [{"id": t["id"], "week_no": t["week_no"], "title_ar": t["title_ar"], "due_on": t["due_on"]}
                    for t in qtasks if i.form and t["form_code"] == i.form and start and t["due_on"]
@@ -117,7 +120,7 @@ async def periodic(cycle_id: int, user: CurrentUser = Depends(current_user),
                       "preset_done": i.preset_done, "starts_on": start,
                       "form": forms.get(i.key), "marks": marks.get(i.key, {}), "quality_tasks": related})
     today = date.today()
-    return {"can_manage": user.has(*MANAGERS), "today": today,
+    return {"can_manage": manager, "today": today,
             "now": locate([{**w, "starts_on": ws[(w["semester"], w["week_no"])]} for w in weeks], today) if weeks else None,
             "departments": departments, "weeks": weeks, "items": items,
             "holidays": [{"title_ar": t, "on": d, "hijri": hj} for t, d, hj in HOLIDAYS_1448], "instructions": INSTRUCTIONS,

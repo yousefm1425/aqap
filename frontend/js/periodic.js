@@ -9,7 +9,7 @@ const ORD = ['قبل بدء التدريب', 'الأول', 'الثاني', 'ال
   'الحادي عشر', 'الثاني عشر', 'الثالث عشر', 'الرابع عشر', 'الخامس عشر', 'السادس عشر', 'السابع عشر', 'الثامن عشر', 'التاسع عشر'];
 const weekName = n => (n ? `الأسبوع ${ORD[n] ?? n}` : ORD[0]);
 const ST = { done: 'منجز', na: 'لا ينطبق', started: 'بدأ التعبئة', late: 'متأخر', now: 'هذا الأسبوع', upcoming: 'قادم' };
-const FILTERS = [['', 'كل البنود'], ['now', 'هذا الأسبوع'], ['late', 'متأخر'], ['dept', 'بنود الأقسام'], ['college', 'بنود وكالة الجودة']];
+const FILTERS = [['', 'كل البنود'], ['now', 'هذا الأسبوع'], ['late', 'متأخر']];
 
 const field = (label, input) => h('div', { class: 'field' }, h('label', null, label), input);
 
@@ -96,7 +96,9 @@ export async function renderPeriodic() {
   const dept = deptIds.includes(Number(params.dept)) ? Number(params.dept) : deptIds.length === 1 && !canManage ? deptIds[0] : null;
   const sem = [1, 2].includes(Number(params.sem)) ? Number(params.sem) : (now?.semester ?? 1);
   const filter = FILTERS.some(([k]) => k === params.f) ? params.f : '';
-  const nav = (over = {}) => go('periodic', { dept: dept ?? '', sem, f: filter, ...over });
+  // وكيل الجودة: «مهامي» (بنود الكلية) و«متابعة تقارير الأقسام»؛ القسم يرى بنوده فقط
+  const view = canManage ? (params.v === 'follow' ? 'follow' : 'mine') : 'dept';
+  const nav = (over = {}) => go('periodic', { v: view === 'dept' ? '' : view, dept: dept ?? '', sem, f: filter, ...over });
   const reload = () => nav({ t: Date.now() });
   const ref = refWeek(now, sem);
   const shown = dept ? [dept] : deptIds;
@@ -112,7 +114,8 @@ export async function renderPeriodic() {
       : sts.includes('started') ? 'started' : sts[0];
     return { st, fin, n: sts.length };
   };
-  const semItems = items.filter(i => i.semester === sem);
+  const viewItems = items.filter(i => (view === 'mine' ? i.scope === 'college' : i.scope === 'dept'));
+  const semItems = viewItems.filter(i => i.semester === sem);
   const sums = new Map(semItems.map(i => [i.key, summary(i)]));
   const cnt = k => semItems.filter(i => sums.get(i.key).st === k).length;
   const passed = semItems.filter(i => !i.preset_done && i.week_no <= Math.max(ref.passedUpTo, ref.cw));
@@ -125,17 +128,26 @@ export async function renderPeriodic() {
 
   const hero = h('header', { class: 'scope-hero qw-hero' },
     h('div', null, h('h1', null, 'التقارير الدورية'),
-      h('p', null, 'المهام الأسبوعية في تقويم أعمال جودة التدريب للعام التدريبي 1448/1449هـ. تقارير الأقسام تُعبّأ من نماذجها في '
-        + '«الخطط والتقارير» فتُحسب حالتها تلقائياً ويجمعها وكيل الجودة في تقرير الكلية، وبقية البنود تُؤشَّر منجزة برابط الشاهد.'),
+      h('p', null, view === 'mine'
+        ? 'مهام وكالة الجودة في تقويم أعمال جودة التدريب 1448/1449هـ: الدورات واللقاءات والتدقيق ونشر الثقافة والتقارير على مستوى الكلية. '
+          + 'أشّر كل مهمة منجزة برابط الشاهد أو «لا ينطبق».'
+        : view === 'follow'
+          ? 'متابعة تقارير الأقسام أسبوعاً بأسبوع: ما عبّأه كل قسم وما تأخر، وافتح «تقرير الكلية المجمّع» لتجمع صفوف الأقسام في تقرير واحد وتصدّره.'
+          : 'تقارير القسم الأسبوعية في تقويم أعمال جودة التدريب 1448/1449هـ. ما له نموذج يُعبّأ من «نموذج القسم» فيُحتسب منجزاً تلقائياً، '
+            + 'وبقية البنود تُؤشَّر منجزة برابط الشاهد.'),
       nowText && h('p', { class: 'tl-now' }, nowText)),
     h('div', { class: 'scope-pick' },
-      deptIds.length > 1 && h('label', null, 'القسم ', h('select', { onchange: e => nav({ dept: e.target.value }) },
+      view !== 'mine' && deptIds.length > 1 && h('label', null, 'القسم ', h('select', { onchange: e => nav({ dept: e.target.value }) },
         h('option', { value: '' }, 'كل الأقسام'), departments.map(d => h('option', { value: String(d.id), selected: d.id === dept }, d.name_ar)))),
       h('div', { class: 'scope-stats' },
         h('span', { class: 'st-upcoming' }, h('b', null, num(cnt('now'))), ' هذا الأسبوع'),
         h('span', { class: 'st-overdue' }, h('b', null, num(cnt('late'))), ' متأخر'),
         h('span', { class: 'st-done' }, h('b', null, doneP == null ? '—' : `${num(doneP)}%`), ' إنجاز حتى الآن'))));
 
+  const views = canManage && h('div', { class: 'pr-views', role: 'tablist' },
+    [['mine', 'مهام وكالة الجودة'], ['follow', 'متابعة تقارير الأقسام']].map(([k, t]) => h('button', { role: 'tab',
+      class: view === k ? 'on' : '', 'aria-selected': String(view === k), onclick: () => nav({ v: k, f: '' }) }, t,
+      h('small', null, num(items.filter(i => i.semester === sem && (k === 'mine' ? i.scope === 'college' : i.scope === 'dept')).length)))));
   const tabs = h('div', { class: 'qw-tabs', role: 'tablist' },
     [1, 2].map(s => h('button', { role: 'tab', class: sem === s ? 'on' : '', 'aria-selected': String(sem === s), onclick: () => nav({ sem: s }) }, SEM[s])));
   const tools = h('div', { class: 'tl-tools' },
@@ -149,8 +161,6 @@ export async function renderPeriodic() {
     const s = sums.get(it.key);
     if (filter === 'now') return s.st === 'now' || it.week_no === ref.cw;
     if (filter === 'late') return s.st === 'late';
-    if (filter === 'dept') return it.scope === 'dept';
-    if (filter === 'college') return it.scope === 'college';
     return true;
   };
 
@@ -214,6 +224,22 @@ export async function renderPeriodic() {
       h('div', null, h('h3', null, 'تعليمات التقويم'), h('ul', null, data.instructions.map(t => h('li', null, t))))),
     h('p', { class: 'faint' }, data.source));
 
-  return h('div', { class: 'cal-page' }, hero, tabs, tools,
+  // متابعة الأقسام: ما استحق حتى الآن لكل قسم، وما أُنجز منه
+  const progress = view === 'follow' && deptIds.length > 1 && h('section', { class: 'card pr-progress' },
+    h('h2', null, `إنجاز الأقسام حتى ${ref.cw > 0 ? weekName(ref.cw) : 'الآن'}`),
+    h('div', { class: 'pr-prog-grid' }, departments.map(d => {
+      const due = semItems.filter(i => !i.preset_done && i.week_no <= Math.max(ref.passedUpTo, ref.cw));
+      const sts = due.map(i => itemState(i, d.id, ref));
+      const fin = sts.filter(x => x === 'done' || x === 'na').length;
+      const late = sts.filter(x => x === 'late').length;
+      const p = due.length ? Math.round((fin / due.length) * 100) : null;
+      return h('button', { type: 'button', class: `pr-prog ${dept === d.id ? 'on' : ''}`, onclick: () => nav({ dept: dept === d.id ? '' : d.id }) },
+        h('strong', null, d.name_ar),
+        h('span', { class: 'pr-bar' }, h('i', { style: { width: `${p ?? 0}%` } })),
+        h('span', { class: 'faint' }, p == null ? 'لا شيء مستحق بعد' : `${num(fin)} من ${num(due.length)} · ${num(p)}%`,
+          late ? h('b', { class: 'pr-late' }, ` · ${num(late)} متأخر`) : null));
+    })));
+
+  return h('div', { class: 'cal-page' }, hero, views, tabs, progress, tools,
     cards.length ? cards : h('section', { class: 'card empty' }, h('p', null, 'لا توجد بنود تطابق هذه التصفية.')), refs);
 }

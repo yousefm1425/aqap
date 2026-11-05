@@ -1073,6 +1073,20 @@ table.counts td:nth-child(n) { color: var(--ink); }
 .pr-refs-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-top: .8rem; }
 .pr-refs h3 { font-size: .95rem; margin: 0 0 .4rem; }
 .pr-refs li { margin-bottom: .3rem; }
+.pr-views { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; margin: 0 0 .9rem; }
+.pr-views button { font: inherit; font-weight: 700; padding: .75rem 1rem; border-radius: 12px; border: 1px solid var(--line); background: #fff;
+  color: var(--ink-2); cursor: pointer; display: flex; justify-content: center; gap: .5rem; align-items: center; }
+.pr-views button small { background: #F1F5F9; border-radius: 99px; padding: 0 .5rem; font-size: .75rem; }
+.pr-views button.on { background: var(--primary); border-color: var(--primary); color: #fff; }
+.pr-views button.on small { background: rgba(255,255,255,.2); }
+.pr-progress h2 { font-size: 1rem; margin: 0 0 .7rem; }
+.pr-prog-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: .6rem; }
+.pr-prog { font: inherit; text-align: start; display: flex; flex-direction: column; gap: .35rem; padding: .65rem .8rem; border: 1px solid var(--line);
+  border-radius: 10px; background: #fff; cursor: pointer; }
+.pr-prog.on { border-color: var(--primary-2); box-shadow: 0 0 0 2px rgba(13,148,136,.18); }
+.pr-bar { height: 6px; background: #E2E8F0; border-radius: 99px; overflow: hidden; }
+.pr-bar i { display: block; height: 100%; background: var(--met); border-radius: 99px; }
+.pr-late { color: var(--not-met); }
 @media (max-width: 760px) { .pr-item { grid-template-columns: minmax(0, 1fr); } .pr-side { justify-content: flex-start; } }
 
 /* التقويم: مصادر المواعيد */
