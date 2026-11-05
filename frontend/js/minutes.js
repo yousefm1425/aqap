@@ -157,7 +157,7 @@ export async function renderMinutes() {
         ['محور واحد على الأقل', draft.agenda.length > 0],
         ['توصية لكل محور', draft.agenda.length > 0 && draft.agenda.every(a => a.recommendations.some(r => r.text_ar.trim()))],
         ['مسؤول تنفيذ لكل توصية', recs.length > 0 && recs.every(r => (r.responsible_ar ?? '').trim())],
-        ['الحضور (عضوان على الأقل)', draft.attendees.length >= 2],
+        ['الحضور (عضوان على الأقل)', draft.attendees.filter(a => (a.name_ar ?? '').trim().length >= 2).length >= 2],
         ['شواهد داعمة (يُستحسن)', m.attachments.length > 0, true],
       ];
       mount(checksEl, items.map(([label, ok, optional]) => h('li', { class: ok ? 'ok' : optional ? 'opt' : '' },
@@ -167,8 +167,26 @@ export async function renderMinutes() {
     renderChecks();
     const touch = () => { dirty = true; renderChecks(); };
 
+    // الصفوف الفارغة (حاضر بلا اسم، توصية بلا نص، محور فارغ) تُترك ولا تُرسل، فلا تمنع الحفظ أو المعاينة
+    const clean = () => {
+      const t = v => (v ?? '').trim();
+      const agenda = [];
+      draft.agenda.forEach((a, i) => {
+        const recs = a.recommendations.filter(r => t(r.text_ar))
+          .map(r => ({ text_ar: t(r.text_ar), responsible_ar: t(r.responsible_ar), period_ar: t(r.period_ar) }));
+        if (!t(a.title_ar) && !recs.length) return;
+        if (t(a.title_ar).length < 2) throw new Error(`اكتب عنوان المحور ${i + 1} (حرفان على الأقل)`);
+        recs.forEach((r, j) => { if (r.text_ar.length < 2) throw new Error(`نص التوصية ${j + 1} في المحور ${i + 1} قصير جداً`); });
+        agenda.push({ title_ar: t(a.title_ar), recommendations: recs });
+      });
+      const attendees = draft.attendees.filter(a => t(a.name_ar))
+        .map(a => ({ name_ar: t(a.name_ar), role_ar: t(a.role_ar), user_id: a.user_id ?? null }));
+      attendees.forEach((a, i) => { if (a.name_ar.length < 2) throw new Error(`اسم الحاضر ${i + 1} قصير جداً`); });
+      return { agenda, attendees };
+    };
+
     const save = async (quiet = false) => {
-      const body = { ...draft, meeting_date: draft.meeting_date || null, start_time: draft.start_time || null,
+      const body = { ...draft, ...clean(), meeting_date: draft.meeting_date || null, start_time: draft.start_time || null,
                      location_ar: draft.location_ar || null, follow_up_owner: draft.follow_up_owner || null };
       await api(`/minutes/${m.id}`, { method: 'PUT', body });
       dirty = false;

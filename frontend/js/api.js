@@ -14,6 +14,21 @@ export class ApiError extends Error {
   constructor(status, message) { super(message); this.status = status; }
 }
 
+/** رسائل التحقق من الخادم (بالإنجليزية) تُعرض للمستخدم بالعربية */
+const FIELD_AR = { name_ar: 'اسم الحاضر', title_ar: 'العنوان', text_ar: 'نص التوصية', full_name_ar: 'الاسم',
+  email: 'البريد الإلكتروني', password: 'كلمة المرور', url: 'الرابط', specialty: 'التخصص', meeting_date: 'تاريخ الاجتماع' };
+function arabicValidation(d) {
+  const f = FIELD_AR[[...(d?.loc ?? [])].reverse().find(x => typeof x === 'string')] ?? 'أحد الحقول';
+  const n = d?.ctx?.min_length ?? d?.ctx?.max_length;
+  switch (d?.type) {
+    case 'string_too_short': return n > 1 ? `${f}: ${n} أحرف على الأقل` : `${f}: مطلوب`;
+    case 'string_too_long': return `${f}: أطول من المسموح (${n} حرفاً)`;
+    case 'missing': return `${f}: مطلوب`;
+    case 'too_long': return `${f}: العدد أكثر من المسموح`;
+    default: return `تحقق من ${f}`;
+  }
+}
+
 export async function api(path, { method = 'GET', body, form } = {}) {
   const headers = {};
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -31,7 +46,7 @@ export async function api(path, { method = 'GET', body, form } = {}) {
   const data = await res.json().catch(() => null);
   if (!res.ok) {
     let msg = data?.detail;
-    if (Array.isArray(msg)) msg = msg.map(d => d.msg).join('، ');
+    if (Array.isArray(msg)) msg = [...new Set(msg.map(arabicValidation))].join('، ');
     throw new ApiError(res.status, msg || `تعذّر تنفيذ الطلب (${res.status})`);
   }
   return data;
