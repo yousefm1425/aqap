@@ -2,6 +2,7 @@ import { api, apiDownload, apiOpen } from './api.js';
 import { deptName, parseRoute, state, userScope } from './app.js';
 import { compute, fmt, isEmpty, mergedRows, tablePhase } from './formcalc.js';
 import { dateTime, h, hasRole, mount, num, pct, promptText, toast } from './ui.js';
+import { applyIrshad, decodeIrshad, matchDept } from './irshadimport.js';
 // نماذج أعمال الاختبارات ترتبط بمعيار فرعي (الرمز «3-1/...») لا بمتطلب واحد
 const reqLabel = x => x.requirement_code.includes('/')
   ? `المعيار الفرعي ${x.requirement_code.split('/')[0]} — يُحدد المتطلب المرتبط من «التوافق» في أعمال الجودة`
@@ -63,6 +64,18 @@ export async function renderForms() {
   if (!deptOptions.includes(dept)) dept = deptOptions[0];
   let selected = params.t ? Number(params.t) : null;          // قالب
   let templates = [];
+
+  // نتائج مُرسلة من منصة الإرشاد (#/forms?req=1-3-4&import=…): تُفتح على قسمها ونموذجها وتنتظر مراجعة المستخدم
+  let pending = null;
+  if (params.import) {
+    try { pending = decodeIrshad(params.import); } catch { pending = null; }
+    if (!pending) toast('بيانات الاستيراد من منصة الإرشاد غير صالحة؛ أعد الإرسال منها', 'error');
+  }
+  if (pending) {
+    const d = matchDept(pending.dept, state.departments.filter(x => deptOptions.includes(x.id)));
+    if (d) dept = d.id;
+    else { toast(`القسم «${pending.dept || 'غير محدد'}» ليس ضمن أقسامك في منصة الجودة؛ اختر القسم في منصة الإرشاد ثم أعد الإرسال`, 'error'); pending = null; }
+  }
 
   const head = h('div', { class: 'ws-head' });
   const listEl = h('nav', { class: 'req-list', 'aria-label': 'النماذج' });
@@ -138,7 +151,9 @@ export async function renderForms() {
     const rec = recordOf(t);
     if (!rec) {
       const can = isDept() && ACTIVE.includes(cycle.status);
-      mount(detailEl, h('section', null,
+      mount(detailEl, pending && reqOf(t) === pending.req && h('div', { class: 'notice irshad-import' },
+        h('p', null, h('b', null, 'نتائج جاهزة من منصة الإرشاد الأكاديمي'), ` — ${pending.dept}. أنشئ النموذج أولاً ثم عبّئه من النتائج.`)),
+      h('section', null,
         h('div', { class: 'crumbs' }, reqLabel(t)),
         h('h2', null, t.title_ar),
         t.is_provisional && h('div', { class: 'notice' }, 'نموذج مبدئي إلى أن يُعتمد النموذج الرسمي لهذا المتطلب.'),
@@ -153,7 +168,25 @@ export async function renderForms() {
     await renderRecord(await api(`/forms/${rec.form_id}`));
   }
 
-  async function renderRecord(f) {
+  const reqOf = t => String(t.requirement_code ?? '').split('/')[0];
+
+  function importBanner(f, t) {
+    if (!pending || reqOf(t) !== pending.req) return null;
+    const can = isDept() && ACTIVE.includes(f.cycle_status) && f.status !== 'submitted';
+    const when = pending.at ? dateTime(new Date(pending.at).toISOString()) : '';
+    return h('div', { class: 'notice irshad-import' },
+      h('p', null, h('b', null, 'نتائج جاهزة من منصة الإرشاد الأكاديمي'),
+        ` — ${pending.dept}${when ? ` · أُعدت ${when}` : ''}. تُعبأ في الحقول ثم تراجعها وتحفظ.`),
+      pending.evidence?.[0]?.url && h('p', { class: 'faint' }, 'لوحة المؤشرات في منصة الإرشاد: ',
+        h('a', { href: pending.evidence[0].url, target: '_blank', rel: 'noopener' }, pending.evidence[0].title || 'فتح')),
+      can ? h('div', { class: 'row' },
+        h('button', { class: 'btn primary', onclick: () => { const p = pending; pending = null; renderRecord(f, p); } }, 'تعبئة النموذج من النتائج'),
+        h('button', { class: 'btn', onclick: () => { pending = null; renderDetail(); } }, 'تجاهل'))
+        : h('p', { class: 'faint' }, f.status === 'submitted'
+          ? 'النموذج مرفوع للاعتماد؛ لا يمكن تعديله الآن.' : 'التعبئة لمنسق القسم أو رئيسه.'));
+  }
+
+  async function renderRecord(f, incoming = null) {
     const schema = f.schema;
     const active = ACTIVE.includes(f.cycle_status);
     const dep = isDept();
@@ -162,6 +195,7 @@ export async function renderForms() {
     const canDecide = f.status === 'submitted' && hasRole(state.me, ['hod', 'quality_dean'], f.department_id, f.cycle_id);
     const canReopen = f.status === 'approved' && hasRole(state.me, ['quality_dean'], f.department_id, f.cycle_id) && active;
     const plan = clone(f.plan_data), follow = clone(f.follow_data);
+    const filled = incoming ? applyIrshad(schema, plan, follow, incoming, { plan: planEditable, follow: followEditable }) : 0;
     let dirty = false;
     const live = new Map();             // عناصر القيم المحسوبة لتحديثها دون إعادة بناء الحقول
     const pivotEls = new Map();
@@ -303,12 +337,21 @@ export async function renderForms() {
       };
       const importBtn = anyEditable && h('button', { class: 'btn small', onclick: () => {
         const dlg = document.getElementById('dialog');
-        const area = h('textarea', { rows: 8, dir: 'auto', placeholder: 'انسخ الجدول من Excel أو من «تقارير منصة الجودة» في منصة الإرشاد مع صف العناوين، ثم الصقه هنا' });
+        const area = h('textarea', { rows: 8, dir: 'auto', placeholder: 'انسخ الجدول من Excel مع صف العناوين، أو الصق «النتائج» المنسوخة من منصة الإرشاد' });
         const mode = h('select', { class: 'input' }, h('option', { value: 'replace' }, 'استبدال الصفوف الحالية'), h('option', { value: 'append' }, 'إضافة إلى الصفوف الحالية'));
         const err = h('p', { class: 'faint', style: { color: 'var(--danger-ink)' } });
-        mount(dlg, h('form', { method: 'dialog', onsubmit: e => {
+        mount(dlg, h('form', { method: 'dialog', onsubmit: async e => {
           e.preventDefault();
           try {
+            // نتائج منسوخة من منصة الإرشاد (زر «نسخ النتائج»): تُعبّأ في النموذج كاملاً لا في هذا الجدول وحده
+            const pkg = /^\s*\{/.test(area.value) ? decodeIrshad(area.value) : null;
+            if (pkg) {
+              if (pkg.req !== reqOf(f)) throw new Error(`هذه نتائج المتطلب ${pkg.req} وليست لهذا النموذج`);
+              dlg.close();
+              if (dirty) await save(true);
+              await renderRecord(await api(`/forms/${f.id}`), pkg);
+              return;
+            }
             const r = importPasted(area.value, mode.value);
             dlg.close();
             toast(`استُورد ${num(r.done)} من ${num(r.total)} صف${r.unknown.length ? ` · أعمدة لم تُطابق: ${r.unknown.join('، ')}` : ''}${r.bad ? ` · ${num(r.bad)} قيمة غير صالحة تُركت فارغة` : ''} — راجعها ثم احفظ`);
@@ -532,11 +575,22 @@ export async function renderForms() {
       f.history.length > 0 && h('ol', { class: 'timeline' }, f.history.map(x => h('li', null, h('span', null, dateTime(x.at)),
         h('strong', null, STATUS[x.to_status]), h('span', null, `— ${x.actor}`), x.comment && h('q', null, x.comment)))));
 
-    mount(detailEl, header, sections, attachSection, flow, lists);
+    const t = templates.find(x => x.id === f.template_id) ?? templates.find(x => x.id === selected);
+    mount(detailEl, header, t && importBanner(f, t), sections, attachSection, flow, lists);
     recalc();
+    if (incoming) {
+      if (filled) { markDirty(); toast(`عُبئت ${num(filled)} قيمة من منصة الإرشاد — راجعها ثم اضغط «حفظ»`); }
+      else toast('لم تُعبأ أي قيمة: الحقول المطابقة غير قابلة للتعديل في حالة النموذج الحالية', 'error');
+    }
   }
 
   await load();
+  if (pending) {
+    const t = templates.find(x => reqOf(x) === pending.req);
+    if (t) selected = t.id;
+    else { toast(`لا يوجد نموذج للمتطلب ${pending.req} لهذا القسم في الدورة الحالية`, 'error'); pending = null; }
+    setParams({ dept, t: selected });               // يُزال معامل الاستيراد من الرابط فلا يتكرر عند التحديث
+  }
   renderHead(); renderList(); await renderDetail();
   return view;
 }
