@@ -60,7 +60,7 @@ def test_cannot_target_self_or_inactive(client, auth):
     assert client.post(f"{API}/users/{me}/password", json={}, headers=auth(ADMIN)).status_code == 403
     assert client.post(f"{API}/users/{me}/end-sessions", headers=auth(ADMIN)).status_code == 403
     uid, _ = _new_user(client, auth, "p.off@ynb", "مدرب موقوف")
-    client.patch(f"{API}/users/{uid}", json={"is_active": False}, headers=auth(DEAN))
+    client.patch(f"{API}/users/{uid}", json={"is_active": False}, headers=auth(ADMIN))
     assert client.post(f"{API}/users/{uid}/password", json={}, headers=auth(ADMIN)).status_code == 403
 
 

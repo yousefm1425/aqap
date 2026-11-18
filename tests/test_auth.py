@@ -5,6 +5,7 @@ from app.config import settings
 
 API = "/api/v1"
 DEAN = "dean@ynb"
+ADMIN = "admin@ynb"
 GOOD = "Quality2026x"
 
 
@@ -18,12 +19,12 @@ def _bearer(token: str) -> dict:
 
 
 def _new_user(client, auth, email: str, name: str) -> tuple[int, str]:
-    r = client.post(f"{API}/users", json={"email": email, "full_name_ar": name}, headers=auth(DEAN))
+    r = client.post(f"{API}/users", json={"email": email, "full_name_ar": name}, headers=auth(ADMIN))
     assert r.status_code == 201, r.text
     uid = r.json()["id"]
-    r = client.post(f"{API}/users/{uid}/roles", json={"role": "faculty", "department_id": 1}, headers=auth(DEAN))
+    r = client.post(f"{API}/users/{uid}/roles", json={"role": "faculty", "department_id": 1}, headers=auth(ADMIN))
     assert r.status_code == 201, r.text
-    r = client.post(f"{API}/users/{uid}/invite", headers=auth(DEAN))
+    r = client.post(f"{API}/users/{uid}/invite", headers=auth(ADMIN))
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["sent"] is False and body["mail_configured"] is False      # لا SMTP في الاختبار ← يُعاد الرابط
@@ -109,14 +110,16 @@ def test_change_password(client, auth):
 def test_inactive_user_cannot_login_or_reset(client, auth):
     uid, token = _new_user(client, auth, "t.off@ynb", "مدرب موقوف")
     assert client.post(f"{API}/auth/reset", json={"token": token, "password": GOOD}).status_code == 200
-    assert client.patch(f"{API}/users/{uid}", json={"is_active": False}, headers=auth(DEAN)).status_code == 200
+    assert client.patch(f"{API}/users/{uid}", json={"is_active": False}, headers=auth(DEAN)).status_code == 403   # وكيل الجودة لا يحذف
+    assert client.patch(f"{API}/users/{uid}", json={"is_active": False}, headers=auth(ADMIN)).status_code == 200
     assert client.post(f"{API}/auth/login", json={"email": "t.off@ynb", "password": GOOD}).status_code == 401
     assert "dev_link" not in client.post(f"{API}/auth/forgot", json={"email": "t.off@ynb"}).json()
-    assert client.post(f"{API}/users/{uid}/invite", headers=auth(DEAN)).status_code == 403
+    assert client.post(f"{API}/users/{uid}/invite", headers=auth(ADMIN)).status_code == 403
 
 
 def test_only_managers_invite(client, auth):
     assert client.post(f"{API}/users/1/invite", headers=auth("coord.cs@ynb")).status_code == 403
+    assert client.post(f"{API}/users/1/invite", headers=auth(DEAN)).status_code == 403
 
 
 def test_prod_disables_dev_tokens(client, auth, monkeypatch):
@@ -133,7 +136,6 @@ def test_prod_disables_dev_tokens(client, auth, monkeypatch):
 def test_admin_changes_email(client, auth):
     uid, token = _new_user(client, auth, "t.mail@ynb", "مدرب البريد")
     tok = client.post(f"{API}/auth/reset", json={"token": token, "password": GOOD}).json()["access_token"]
-    ADMIN = "admin@ynb"
     # تعديل الاسم والبريد لمدير النظام فقط
     assert client.patch(f"{API}/users/{uid}", json={"email": "x.mail@ynb"}, headers=auth(DEAN)).status_code == 403
     # البريد مأخوذ ← 409
