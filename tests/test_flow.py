@@ -280,24 +280,38 @@ def test_evidence_links_policy_and_folders(client, auth):
 
 
 def test_users_and_guides_admin(client, auth):
-    """إدارة المستخدمين والأدلة: لوكيل الجودة فقط، مع حماية دور مدير النظام والحساب الذاتي."""
+    """المستخدمون: وكيل الجودة يطّلع فقط، والإضافة والحذف (الإيقاف) والأدوار والدعوات لمدير المنصة وحده."""
+    ADMIN = "admin@ynb"
     assert client.get(f"{API}/users", headers=auth(COORD)).status_code == 403
     data = client.get(f"{API}/users", headers=auth(DEAN)).json()
-    assert data["can_grant_admin"] is False and any(u["email"] == "dean@ynb" for u in data["users"])
-    r = client.post(f"{API}/users", headers=auth(DEAN), json={"email": "New.Trainer@ynb", "full_name_ar": "مدرب جديد"})
+    assert data["can_grant_admin"] is False and data["can_manage_users"] is False
+    assert any(u["email"] == "dean@ynb" for u in data["users"])
+    # وكيل الجودة لا يضيف ولا يحذف ولا يعدّل أي مستخدم
+    new = {"email": "New.Trainer@ynb", "full_name_ar": "مدرب جديد"}
+    assert client.post(f"{API}/users", headers=auth(DEAN), json=new).status_code == 403
+    dean_id = next(u["id"] for u in data["users"] if u["email"] == "dean@ynb")
+    coord_id = next(u["id"] for u in data["users"] if u["email"] == COORD)
+    assert client.patch(f"{API}/users/{coord_id}", headers=auth(DEAN), json={"is_active": False}).status_code == 403
+    assert client.post(f"{API}/users/{coord_id}/roles", headers=auth(DEAN), json={"role": "faculty", "department_id": 1}).status_code == 403
+    assert client.post(f"{API}/users/{coord_id}/invite", headers=auth(DEAN)).status_code == 403
+    # مدير المنصة يدير المستخدمين
+    assert client.get(f"{API}/users", headers=auth(ADMIN)).json()["can_manage_users"] is True
+    r = client.post(f"{API}/users", headers=auth(ADMIN), json=new)
     assert r.status_code == 201
     uid = r.json()["id"]
-    assert client.post(f"{API}/users", headers=auth(DEAN), json={"email": "new.trainer@ynb", "full_name_ar": "مكرر"}).status_code == 409
-    assert client.post(f"{API}/users/{uid}/roles", headers=auth(DEAN), json={"role": "hod"}).status_code == 403          # بلا قسم
-    assert client.post(f"{API}/users/{uid}/roles", headers=auth(DEAN), json={"role": "system_admin"}).status_code == 403
-    rr = client.post(f"{API}/users/{uid}/roles", headers=auth(DEAN), json={"role": "faculty", "department_id": 1})
+    assert client.post(f"{API}/users", headers=auth(ADMIN), json={"email": "new.trainer@ynb", "full_name_ar": "مكرر"}).status_code == 409
+    assert client.post(f"{API}/users/{uid}/roles", headers=auth(ADMIN), json={"role": "hod"}).status_code == 403          # بلا قسم
+    rr = client.post(f"{API}/users/{uid}/roles", headers=auth(ADMIN), json={"role": "faculty", "department_id": 1})
     assert rr.status_code == 201
     me = client.get(f"{API}/me", headers=auth("new.trainer@ynb")).json()
     assert me["grants"][0]["role"] == "faculty"
-    dean_id = next(u["id"] for u in data["users"] if u["email"] == "dean@ynb")
-    assert client.patch(f"{API}/users/{dean_id}", headers=auth(DEAN), json={"is_active": False}).status_code == 403
-    assert client.patch(f"{API}/users/{uid}", headers=auth(DEAN), json={"is_active": False}).status_code == 200
-    assert client.delete(f"{API}/roles/{rr.json()['id']}", headers=auth(DEAN)).status_code == 200
+    assert client.delete(f"{API}/roles/{rr.json()['id']}", headers=auth(DEAN)).status_code == 403
+    assert client.delete(f"{API}/roles/{rr.json()['id']}", headers=auth(ADMIN)).status_code == 200
+    assert client.patch(f"{API}/users/{uid}", headers=auth(DEAN), json={"is_active": False}).status_code == 403
+    assert client.patch(f"{API}/users/{uid}", headers=auth(ADMIN), json={"is_active": False}).status_code == 200
+    admin_id = client.get(f"{API}/me", headers=auth(ADMIN)).json()["id"]
+    assert client.patch(f"{API}/users/{admin_id}", headers=auth(ADMIN), json={"is_active": False}).status_code == 403
+    assert dean_id
 
     assert client.post(f"{API}/guides", headers=auth(COORD), json={"title_ar": "دليل", "url": "https://x.sa/a.pdf"}).status_code == 403
     g = client.post(f"{API}/guides", headers=auth(DEAN), json={"title_ar": "دليل رئيس القسم", "url": "https://tvtc.gov.sa/guide.pdf"})

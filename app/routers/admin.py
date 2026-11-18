@@ -1,7 +1,8 @@
 """إدارة المستخدمين والصلاحيات، ومكتبة الأدلة.
 
-- المستخدمون: وكيل الجودة ومدير النظام يضيفون الحسابات ويسندون الأدوار (لكل قسم أو للمنشأة) ويوقفون الحسابات.
-  لا يمنح وكيل الجودة دور «مدير النظام»، ولا يوقف أحد حسابه بنفسه. كل تغيير في سجل التدقيق.
+- المستخدمون: مدير المنصة وحده يضيف الحسابات ويحذفها (يوقفها) ويسند الأدوار ويسحبها ويرسل الدعوات.
+  وكيل الجودة يطّلع على قائمة المستخدمين وأدوارهم للعلم فقط، ولا يضيف أو يحذف أو يعدّل أي مستخدم.
+  لا يوقف أحد حسابه بنفسه. كل تغيير في سجل التدقيق.
 - الأدلة: روابط أدلة ومراجع يضيفها وكيل الجودة ويطّلع عليها الجميع.
 """
 import json
@@ -63,6 +64,11 @@ def _sysadmin(user: CurrentUser) -> None:
         raise forbid("هذه العملية من صلاحية مدير النظام فقط")
 
 
+def _user_admin(user: CurrentUser) -> None:
+    if not user.has("system_admin"):
+        raise forbid("إضافة المستخدمين وحذفهم وتعديل أدوارهم من صلاحية مدير المنصة فقط")
+
+
 def _temp_password() -> str:
     # 12 خانة بلا الأحرف الملتبسة (0/O، 1/l/I) لتُملى أو تُنسخ بسهولة؛ حروف وأرقام دائماً
     letters, digits = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ", "23456789"
@@ -116,12 +122,12 @@ async def list_users(user: CurrentUser = Depends(current_user), conn: AsyncConne
     if not is_sys:                    # تفاصيل الدخول لمدير النظام فقط
         for r in rows:
             r.pop("last_login_at"); r.pop("is_locked"); r.pop("must_change")
-    return {"users": rows, "can_grant_admin": is_sys, "is_sysadmin": is_sys}
+    return {"users": rows, "can_grant_admin": is_sys, "is_sysadmin": is_sys, "can_manage_users": is_sys}
 
 
 @router.post("/users", status_code=201)
 async def create_user(body: UserIn, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
-    _manager(user)
+    _user_admin(user)
     await _actor(conn, user)
     cur = await conn.execute(
         "INSERT INTO app_user (institution_id, email, full_name_ar) VALUES (%s, lower(%s), %s) RETURNING id",
@@ -132,7 +138,7 @@ async def create_user(body: UserIn, user: CurrentUser = Depends(current_user), c
 @router.post("/users/{user_id}/invite")
 async def invite_user(user_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
     """يرسل للمستخدم رابط تعيين كلمة المرور (للحساب الجديد أو لمن نسيها). إن لم يكن البريد مهيأً يُعاد الرابط لمشاركته يدوياً."""
-    _manager(user)
+    _user_admin(user)
     target = await _own_user(conn, user, user_id)
     if not target["is_active"]:
         raise forbid("الحساب موقوف؛ فعّله أولاً")
@@ -147,7 +153,7 @@ async def invite_user(user_id: int, user: CurrentUser = Depends(current_user), c
 @router.patch("/users/{user_id}")
 async def patch_user(user_id: int, body: UserPatch, user: CurrentUser = Depends(current_user),
                      conn: AsyncConnection = Depends(get_conn, scope="function")):
-    _manager(user)
+    _user_admin(user)
     await _own_user(conn, user, user_id)
     if (body.full_name_ar is not None or body.email is not None) and not user.has("system_admin"):
         raise forbid("تعديل اسم المستخدم وبريده من صلاحية مدير النظام فقط")
@@ -215,7 +221,7 @@ async def admin_end_sessions(user_id: int, user: CurrentUser = Depends(current_u
 @router.post("/users/{user_id}/roles", status_code=201)
 async def add_role(user_id: int, body: RoleIn, user: CurrentUser = Depends(current_user),
                    conn: AsyncConnection = Depends(get_conn, scope="function")):
-    _manager(user)
+    _user_admin(user)
     await _own_user(conn, user, user_id)
     if body.role == "system_admin" and not user.has("system_admin"):
         raise forbid("منح دور «مدير النظام» من صلاحية مدير النظام فقط")
@@ -238,7 +244,7 @@ async def add_role(user_id: int, body: RoleIn, user: CurrentUser = Depends(curre
 
 @router.delete("/roles/{role_id}")
 async def remove_role(role_id: int, user: CurrentUser = Depends(current_user), conn: AsyncConnection = Depends(get_conn, scope="function")):
-    _manager(user)
+    _user_admin(user)
     cur = await conn.execute(
         """SELECT r.* FROM user_role r JOIN app_user u ON u.id = r.user_id
             WHERE r.id = %s AND (u.institution_id = %s OR u.institution_id IS NULL)""", (role_id, user.institution_id))
